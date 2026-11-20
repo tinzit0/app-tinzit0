@@ -25,12 +25,10 @@
       "expo-router",
       "expo-status-bar",
       "expo-sqlite",
-      "expo-font"
+      "expo-font",
+      "@react-native-community/datetimepicker"
     ],
     "scheme": "tinzit0",
-    "backgroundColor": "#0B0B0C",
-    "experiments": {
-      "typedRoutes": true
-    }
+    "backgroundColor": "#0B0B0C"
   }
 }

@@ -6,6 +6,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { endOfWeek, startOfWeek, toISODate, weekdayMonFirst } from '@/utils/fechas';
+import { conteoHoy } from './tareas';
 
 // ---------- Ajustes (clave → valor) ----------
 
@@ -43,28 +44,7 @@ export type ResumenHoy = {
  */
 export async function getResumenHoy(db: SQLiteDatabase): Promise<ResumenHoy> {
   const hoy = new Date();
-  const hoyISO = toISODate(hoy);
-  const diaSemana = String(weekdayMonFirst(hoy));
-
-  const tareas = await db.getFirstAsync<{ pendientes: number; hechas: number }>(
-    `
-    SELECT
-      SUM(CASE WHEN hecha = 0 THEN 1 ELSE 0 END) AS pendientes,
-      SUM(CASE WHEN hecha = 1 THEN 1 ELSE 0 END) AS hechas
-    FROM (
-      SELECT
-        CASE
-          WHEN t.repeat_type = 'none' THEN t.done
-          ELSE EXISTS (SELECT 1 FROM task_completions c WHERE c.task_id = t.id AND c.date = $hoy)
-        END AS hecha
-      FROM tasks t
-      WHERE (t.repeat_type = 'none' AND t.due_date = $hoy)
-         OR (t.repeat_type = 'daily')
-         OR (t.repeat_type = 'weekdays' AND (',' || t.repeat_days || ',') LIKE '%,' || $dia || ',%')
-    )
-    `,
-    { $hoy: hoyISO, $dia: diaSemana },
-  );
+  const tareas = await conteoHoy(db);
 
   const gym = await db.getFirstAsync<{ label: string }>(
     'SELECT label FROM gym_routine WHERE weekday = ?',
@@ -82,8 +62,8 @@ export async function getResumenHoy(db: SQLiteDatabase): Promise<ResumenHoy> {
 
   return {
     nombre,
-    tareasPendientes: tareas?.pendientes ?? 0,
-    tareasHechas: tareas?.hechas ?? 0,
+    tareasPendientes: tareas.pendientes,
+    tareasHechas: tareas.hechas,
     gymHoy: gym?.label ?? null,
     gastoSemana: gasto?.total ?? 0,
     presupuestoSemana: presupuesto,

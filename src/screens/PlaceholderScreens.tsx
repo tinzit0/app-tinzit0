@@ -5,18 +5,6 @@
 import { EmptyState } from '@/components/EmptyState';
 import { Screen } from '@/components/Screen';
 
-export function TareasScreen() {
-  return (
-    <Screen eyebrow="Organízate" title="Tareas">
-      <EmptyState
-        icon="checkmark-done-outline"
-        title="Aquí van tus tareas"
-        description="Diarias, semanales y las que se repiten. Con prioridad y todo."
-      />
-    </Screen>
-  );
-}
-
 export function GymScreen() {
   return (
     <Screen eyebrow="Entrenamiento" title="Gym">

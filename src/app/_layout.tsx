@@ -54,6 +54,7 @@ function RootStack() {
       >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="ajustes" options={{ title: 'Ajustes' }} />
+        <Stack.Screen name="tarea" options={{ presentation: 'modal', title: 'Tarea' }} />
       </Stack>
     </>
   );

@@ -56,6 +56,10 @@ function RootStack() {
         <Stack.Screen name="ajustes" options={{ title: 'Ajustes' }} />
         <Stack.Screen name="tarea" options={{ presentation: 'modal', title: 'Tarea' }} />
         <Stack.Screen name="gasto" options={{ presentation: 'modal', title: 'Gasto' }} />
+        <Stack.Screen name="entreno" options={{ title: 'Entrenamiento' }} />
+        <Stack.Screen name="ejercicio" options={{ title: 'Ejercicio' }} />
+        <Stack.Screen name="rutina" options={{ title: 'Rutina' }} />
+        <Stack.Screen name="nota" options={{ title: '' }} />
       </Stack>
     </>
   );

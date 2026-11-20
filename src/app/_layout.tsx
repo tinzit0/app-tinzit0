@@ -84,6 +84,7 @@ function RootStack() {
         <Stack.Screen name="habito" options={{ title: 'Hábito' }} />
         <Stack.Screen name="habito-form" options={{ presentation: 'modal', title: 'Hábito' }} />
         <Stack.Screen name="logros" options={{ title: 'Medallas' }} />
+        <Stack.Screen name="estadisticas" options={{ title: 'Estadísticas' }} />
       </Stack>
     </>
   );

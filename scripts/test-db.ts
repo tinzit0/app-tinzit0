@@ -15,6 +15,7 @@ import * as metas from '../src/database/metas';
 import * as cuerpo from '../src/database/cuerpo';
 import * as habitos from '../src/database/habitos';
 import * as logros from '../src/database/logros';
+import { compararMes } from '../src/database/estadisticas';
 import { mensajeDomingo, mensajeManana } from '../src/notifications/mensajes';
 import { getResumenHoy } from '../src/database/queries';
 import { toISODate, endOfWeek } from '../src/utils/fechas';
@@ -144,6 +145,13 @@ async function main() {
   assert.ok(keys.includes('tarea_1') && keys.includes('gym_1') && keys.includes('cuerpo_1') && keys.includes('meta_1') === false);
   assert.equal((await logros.evaluarLogros(db)).length, 0);
   assert.equal((await logros.logrosSinVer(db)).length, nuevos.length);
+
+  // Estadísticas del mes
+  const est = await compararMes(db, new Date().getFullYear(), new Date().getMonth());
+  assert.ok(est.actual.tareasHechas >= 2);
+  assert.equal(est.actual.diasGym.length, 1);
+  assert.ok(est.actual.gastoTotal >= 7500);
+  assert.equal(est.actual.habitos.length, 1);
 
   // Mensajes
   assert.ok(mensajeManana({ nombre: 'Tin', tareas: 2, gym: 'Pecho' }).cuerpo.includes('2 tareas'));

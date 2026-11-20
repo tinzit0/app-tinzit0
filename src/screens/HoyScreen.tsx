@@ -125,6 +125,17 @@ export function HoyScreen() {
         </Card>
       </View>
 
+      {/* Acceso a estadísticas del mes */}
+      <Card
+        onPress={() => router.push('/estadisticas')}
+        accessibilityLabel="Ver estadísticas del mes"
+        style={[styles.banner, { marginTop: space.md, marginBottom: 0 }]}
+      >
+        <Ionicons name="stats-chart-outline" size={20} color={colors.accent} />
+        <AppText variant="callout" style={{ flex: 1 }}>Tu mes en números</AppText>
+        <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+      </Card>
+
       {/* Hábitos del día */}
       <View style={{ marginTop: space.xxl }}>
         <HabitosHoy

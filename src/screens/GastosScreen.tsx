@@ -33,7 +33,7 @@ import { totalFijosMes } from '@/database/fijos';
 import { listarMetas } from '@/database/metas';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, space } from '@/theme/tokens';
-import { categoria } from '@/utils/categorias';
+import { categoria, colorCategoria } from '@/utils/categorias';
 import { fechaLarga, fromISODate, toISODate } from '@/utils/fechas';
 import { formatCLP } from '@/utils/moneda';
 
@@ -50,7 +50,7 @@ type Datos = {
 export function GastosScreen() {
   const db = useSQLiteContext();
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const [periodo, setPeriodo] = useState<Periodo>('semana');
   const [datos, setDatos] = useState<Datos | null>(null);
   const [fijosMes, setFijosMes] = useState(0);
@@ -182,7 +182,7 @@ export function GastosScreen() {
                   <View key={c.category} style={{ gap: space.sm }}>
                     <View style={styles.rowBetween}>
                       <View style={styles.catLabel}>
-                        <View style={[styles.dot, { backgroundColor: cat.color }]} />
+                        <View style={[styles.dot, { backgroundColor: colorCategoria(cat, isDark) }]} />
                         <AppText variant="callout">{cat.label}</AppText>
                       </View>
                       <AppText variant="callout" tabular>
@@ -191,7 +191,7 @@ export function GastosScreen() {
                       </AppText>
                     </View>
                     <View style={[styles.track, { backgroundColor: colors.surfaceRaised }]}>
-                      <View style={[styles.fill, { width: `${pct * 100}%`, backgroundColor: cat.color }]} />
+                      <View style={[styles.fill, { width: `${pct * 100}%`, backgroundColor: colorCategoria(cat, isDark) }]} />
                     </View>
                   </View>
                 );

@@ -4,10 +4,13 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { View } from 'react-native';
 
-import { categoria } from '@/utils/categorias';
+import { useTheme } from '@/theme/ThemeProvider';
+import { categoria, colorCategoria } from '@/utils/categorias';
 
 export function CategoryIcon({ cat, size = 40 }: { cat: string; size?: number }) {
+  const { isDark } = useTheme();
   const c = categoria(cat);
+  const color = colorCategoria(c, isDark);
   return (
     <View
       style={{
@@ -16,10 +19,10 @@ export function CategoryIcon({ cat, size = 40 }: { cat: string; size?: number })
         borderRadius: size * 0.32,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: `${c.color}22`, // mismo color con transparencia
+        backgroundColor: `${color}22`, // mismo color con transparencia
       }}
     >
-      <Ionicons name={c.icon} size={size * 0.48} color={c.color} />
+      <Ionicons name={c.icon} size={size * 0.48} color={color} />
     </View>
   );
 }

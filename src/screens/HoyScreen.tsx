@@ -1,18 +1,21 @@
 /**
  * Pantalla "Hoy": lo primero que ves al abrir la app.
- * Saludo según la hora, tareas del día, si toca gym y el gasto de la semana.
+ * Saludo según la hora, tareas del día, si toca gym, el gasto de la semana
+ * y tus apps favoritas.
  */
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Card } from '@/components/Card';
 import { IconButton } from '@/components/IconButton';
 import { ProgressBar } from '@/components/ProgressBar';
 import { Screen } from '@/components/Screen';
+import { QuickApps } from '@/components/QuickApps';
+import { appsIniciales, listarApps, type AppFavorita } from '@/database/apps';
 import { getResumenHoy, type ResumenHoy } from '@/database/queries';
 import { necesitaRespaldo } from '@/database/respaldo';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -26,12 +29,17 @@ export function HoyScreen() {
   const { colors } = useTheme();
   const [data, setData] = useState<ResumenHoy | null>(null);
   const [pedirRespaldo, setPedirRespaldo] = useState(false);
+  const [apps, setApps] = useState<AppFavorita[]>([]);
 
   // Cada vez que vuelves a esta pestaña, recargamos los datos.
   useFocusEffect(
     useCallback(() => {
       getResumenHoy(db).then(setData).catch(console.warn);
       necesitaRespaldo(db).then(setPedirRespaldo).catch(() => {});
+      appsIniciales(db)
+        .then(() => listarApps(db))
+        .then(setApps)
+        .catch(console.warn);
     }, [db]),
   );
 
@@ -107,6 +115,13 @@ export function HoyScreen() {
           </AppText>
         </Card>
       </View>
+
+      {/* Accesos directos a tus apps */}
+      {Platform.OS === 'android' && apps.length > 0 ? (
+        <View style={{ marginTop: space.xxl }}>
+          <QuickApps apps={apps} />
+        </View>
+      ) : null}
     </Screen>
   );
 }

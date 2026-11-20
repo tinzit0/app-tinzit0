@@ -5,6 +5,7 @@
  * - Gasto por categoría
  * - Lista de movimientos agrupada por día
  */
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
@@ -28,6 +29,8 @@ import {
   totalPorCategoria,
   type Gasto,
 } from '@/database/gastos';
+import { totalFijosMes } from '@/database/fijos';
+import { listarMetas } from '@/database/metas';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, space } from '@/theme/tokens';
 import { categoria } from '@/utils/categorias';
@@ -50,6 +53,8 @@ export function GastosScreen() {
   const { colors } = useTheme();
   const [periodo, setPeriodo] = useState<Periodo>('semana');
   const [datos, setDatos] = useState<Datos | null>(null);
+  const [fijosMes, setFijosMes] = useState(0);
+  const [ahorrado, setAhorrado] = useState(0);
 
   const cargar = useCallback(async () => {
     const hoy = new Date();
@@ -67,6 +72,8 @@ export function GastosScreen() {
       gastosEnRango(db, rango),
     ]);
     setDatos({ total, anterior, presupuesto, totalSemana, porCategoria, gastos });
+    setFijosMes(await totalFijosMes(db));
+    setAhorrado((await listarMetas(db)).reduce((n, m) => n + m.ahorrado, 0));
   }, [db, periodo]);
 
   useFocusEffect(
@@ -121,9 +128,27 @@ export function GastosScreen() {
           ) : null}
         </View>
 
+        {/* Accesos: gastos fijos y metas de ahorro */}
+        <View style={styles.accesos}>
+          <Card style={styles.acceso} onPress={() => router.push('/fijos')} accessibilityLabel="Gastos fijos">
+            <Ionicons name="repeat-outline" size={20} color={colors.accent} />
+            <AppText variant="callout" style={{ marginTop: space.sm }}>Fijos</AppText>
+            <AppText variant="caption" tone="tertiary" tabular numberOfLines={1}>
+              {formatCLP(fijosMes)}/mes
+            </AppText>
+          </Card>
+          <Card style={styles.acceso} onPress={() => router.push('/metas')} accessibilityLabel="Metas de ahorro">
+            <Ionicons name="flag-outline" size={20} color={colors.accent} />
+            <AppText variant="callout" style={{ marginTop: space.sm }}>Metas</AppText>
+            <AppText variant="caption" tone="tertiary" tabular numberOfLines={1}>
+              {formatCLP(ahorrado)} ahorrado
+            </AppText>
+          </Card>
+        </View>
+
         {/* Presupuesto semanal */}
         {datos && datos.presupuesto > 0 ? (
-          <Card style={{ marginTop: space.xl }}>
+          <Card style={{ marginTop: space.md }}>
             <View style={styles.rowBetween}>
               <AppText variant="overline" tone="tertiary">Presupuesto semanal</AppText>
               <AppText variant="caption" tone="secondary" tabular>
@@ -230,6 +255,8 @@ export function GastosScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  accesos: { flexDirection: 'row', gap: space.md, marginTop: space.xl },
+  acceso: { flex: 1, padding: space.lg },
   totalBlock: { marginTop: space.xxl, gap: space.xs },
   totalNumber: { fontSize: 44, lineHeight: 52, letterSpacing: -1.6 },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

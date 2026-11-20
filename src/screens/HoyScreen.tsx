@@ -14,6 +14,7 @@ import { IconButton } from '@/components/IconButton';
 import { ProgressBar } from '@/components/ProgressBar';
 import { Screen } from '@/components/Screen';
 import { getResumenHoy, type ResumenHoy } from '@/database/queries';
+import { necesitaRespaldo } from '@/database/respaldo';
 import { useTheme } from '@/theme/ThemeProvider';
 import { space } from '@/theme/tokens';
 import { fechaLarga, saludo } from '@/utils/fechas';
@@ -24,11 +25,13 @@ export function HoyScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const [data, setData] = useState<ResumenHoy | null>(null);
+  const [pedirRespaldo, setPedirRespaldo] = useState(false);
 
   // Cada vez que vuelves a esta pestaña, recargamos los datos.
   useFocusEffect(
     useCallback(() => {
       getResumenHoy(db).then(setData).catch(console.warn);
+      necesitaRespaldo(db).then(setPedirRespaldo).catch(() => {});
     }, [db]),
   );
 
@@ -44,6 +47,20 @@ export function HoyScreen() {
         <IconButton icon="settings-outline" accessibilityLabel="Abrir ajustes" onPress={() => router.push('/ajustes')} />
       }
     >
+      {/* Recordatorio semanal de respaldo */}
+      {pedirRespaldo ? (
+        <Card
+          onPress={() => router.push('/ajustes')}
+          accessibilityLabel="Hacer respaldo"
+          style={[styles.banner, { backgroundColor: colors.warningSoft, borderColor: 'transparent' }]}
+        >
+          <Ionicons name="cloud-upload-outline" size={20} color={colors.warning} />
+          <AppText variant="callout" style={{ flex: 1 }}>
+            Hace rato que no respaldas tus datos. Tócame y lo hacemos en 10 segundos.
+          </AppText>
+        </Card>
+      ) : null}
+
       {/* Tareas de hoy: la tarjeta principal */}
       <Card onPress={() => router.navigate('/tareas')} accessibilityLabel="Ver tareas de hoy">
         <View style={styles.cardTop}>
@@ -100,4 +117,5 @@ const styles = StyleSheet.create({
   bigSuffix: { flexShrink: 1 },
   row: { flexDirection: 'row', gap: space.md, marginTop: space.md },
   half: { flex: 1 },
+  banner: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg, marginBottom: space.md },
 });

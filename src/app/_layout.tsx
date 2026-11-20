@@ -3,7 +3,8 @@
  * 1. Carga la tipografía Inter.
  * 2. Abre la base de datos y aplica las migraciones.
  * 3. Activa el tema claro/oscuro.
- * 4. Define la navegación: las pestañas + la pantalla de Ajustes encima.
+ * 4. Activa el bloqueo con huella (si lo encendiste en Ajustes).
+ * 5. Define la navegación: las pestañas + la pantalla de Ajustes encima.
  */
 import {
   Inter_400Regular,
@@ -17,6 +18,7 @@ import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { LockGate } from '@/components/LockGate';
 import { migrateDb } from '@/database/schema';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { fonts } from '@/theme/tokens';
@@ -31,7 +33,9 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider>
         <SQLiteProvider databaseName="tinzit0.db" onInit={migrateDb}>
-          <RootStack />
+          <LockGate>
+            <RootStack />
+          </LockGate>
         </SQLiteProvider>
       </ThemeProvider>
     </GestureHandlerRootView>

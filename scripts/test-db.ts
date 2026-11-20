@@ -12,6 +12,7 @@ import * as gym from '../src/database/gym';
 import * as notas from '../src/database/notas';
 import * as fijos from '../src/database/fijos';
 import * as metas from '../src/database/metas';
+import * as cuerpo from '../src/database/cuerpo';
 import { mensajeDomingo, mensajeManana } from '../src/notifications/mensajes';
 import { getResumenHoy } from '../src/database/queries';
 import { toISODate, endOfWeek } from '../src/utils/fechas';
@@ -112,6 +113,15 @@ async function main() {
   await metas.abonar(db, meta, 5000);
   assert.equal((await metas.obtenerMeta(db, meta))!.ahorrado, 15000);
   assert.equal((await metas.buscarMeta(db, 'abona a viaje'))!.id, meta);
+
+  // Cuerpo: dos guardados el mismo día se combinan
+  await cuerpo.guardarMedicion(db, hoy, { weight: 78.4 });
+  await cuerpo.guardarMedicion(db, hoy, { waist: 84 });
+  const med = await cuerpo.listarMediciones(db);
+  assert.equal(med.length, 1);
+  assert.equal(med[0].weight, 78.4);
+  assert.equal(med[0].waist, 84);
+  assert.equal((await cuerpo.ultimosValores(db)).weight?.valor, 78.4);
 
   // Mensajes
   assert.ok(mensajeManana({ nombre: 'Tin', tareas: 2, gym: 'Pecho' }).cuerpo.includes('2 tareas'));

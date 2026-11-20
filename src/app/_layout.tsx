@@ -72,6 +72,8 @@ function RootStack() {
         <Stack.Screen name="metas" options={{ title: 'Metas de ahorro' }} />
         <Stack.Screen name="meta" options={{ title: 'Meta' }} />
         <Stack.Screen name="meta-form" options={{ presentation: 'modal', title: 'Meta' }} />
+        <Stack.Screen name="cuerpo" options={{ title: 'Cuerpo' }} />
+        <Stack.Screen name="medicion" options={{ presentation: 'modal', title: 'Medición' }} />
       </Stack>
     </>
   );

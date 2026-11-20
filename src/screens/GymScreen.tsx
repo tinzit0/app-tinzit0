@@ -25,6 +25,7 @@ import {
   type DiaRutina,
   type EjercicioConStats,
 } from '@/database/gym';
+import { ultimosValores } from '@/database/cuerpo';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, space } from '@/theme/tokens';
 import { fechaCorta, fromISODate, startOfWeek, toISODate, weekdayMonFirst } from '@/utils/fechas';
@@ -39,6 +40,7 @@ export function GymScreen() {
   const [entrenadas, setEntrenadas] = useState<string[]>([]);
   const [ejercicios, setEjercicios] = useState<EjercicioConStats[]>([]);
   const [seriesHoy, setSeriesHoy] = useState(0);
+  const [peso, setPeso] = useState<number | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -47,6 +49,7 @@ export function GymScreen() {
         setEntrenadas(await fechasEntrenadas(db, rangoSemana()));
         setEjercicios(await listarEjercicios(db));
         setSeriesHoy((await seriesDeFecha(db, toISODate())).length);
+        setPeso((await ultimosValores(db)).weight?.valor ?? null);
       })().catch(console.warn);
     }, [db]),
   );
@@ -80,6 +83,22 @@ export function GymScreen() {
           onPress={() => router.push('/entreno')}
           style={{ marginTop: space.xl }}
         />
+      </Card>
+
+      {/* Cuerpo: peso y medidas */}
+      <Card
+        onPress={() => router.push('/cuerpo')}
+        accessibilityLabel="Peso y medidas"
+        style={[styles.cuerpo, { marginTop: space.md }]}
+      >
+        <Ionicons name="body-outline" size={22} color={colors.accent} />
+        <View style={{ flex: 1 }}>
+          <AppText variant="callout">Peso y medidas</AppText>
+          <AppText variant="caption" tone="tertiary">
+            {peso ? `Último peso: ${peso} kg` : 'Registra tu peso para ver tu evolución'}
+          </AppText>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
       </Card>
 
       {/* Semana */}
@@ -178,6 +197,7 @@ const styles = StyleSheet.create({
     marginHorizontal: space.xs,
   },
   week: { flexDirection: 'row', gap: 6 },
+  cuerpo: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg },
   day: {
     flex: 1,
     aspectRatio: 0.72,

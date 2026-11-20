@@ -135,6 +135,46 @@ const MIGRATIONS: string[] = [
     date    TEXT NOT NULL
   );
   `,
+
+  // v3 — Peso corporal y medidas (en kg y cm). Cada campo es opcional.
+  `
+  CREATE TABLE IF NOT EXISTS body_metrics (
+    id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    date   TEXT NOT NULL,
+    weight REAL,
+    chest  REAL,
+    arm    REAL,
+    waist  REAL,
+    leg    REAL
+  );
+  CREATE INDEX IF NOT EXISTS idx_body_date ON body_metrics(date);
+  INSERT OR IGNORE INTO settings (key, value) VALUES ('descanso_seg', '90');
+  `,
+
+  // v4 — Hábitos (con registro diario) y logros desbloqueados.
+  `
+  CREATE TABLE IF NOT EXISTS habits (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL,
+    icon       TEXT NOT NULL DEFAULT 'checkmark',
+    color      TEXT NOT NULL DEFAULT '#CFF56B',
+    archived   INTEGER NOT NULL DEFAULT 0,
+    position   INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+
+  CREATE TABLE IF NOT EXISTS habit_logs (
+    habit_id INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+    date     TEXT NOT NULL,
+    PRIMARY KEY (habit_id, date)
+  );
+
+  CREATE TABLE IF NOT EXISTS achievements (
+    key         TEXT PRIMARY KEY NOT NULL,
+    unlocked_at TEXT NOT NULL,
+    seen        INTEGER NOT NULL DEFAULT 0
+  );
+  `,
 ];
 
 /** Se llama una vez al abrir la app (desde SQLiteProvider en el _layout raíz). */

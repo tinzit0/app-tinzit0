@@ -2,14 +2,14 @@
  * Registrar el entrenamiento del día:
  * 1. Elige (o escribe) el ejercicio
  * 2. Ajusta reps y peso (se precargan con lo de la última vez)
- * 3. "Agregar serie" — y repites
+ * 3. "Agregar serie" — parte solo el temporizador de descanso — y repites
  * Abajo ves todo lo que llevas hoy, agrupado por ejercicio.
  */
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { Stack } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 
@@ -17,6 +17,7 @@ import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { Chip } from '@/components/Chip';
 import { Field, FieldLabel } from '@/components/Field';
+import { RestTimer, type RestTimerHandle } from '@/components/RestTimer';
 import { Stepper } from '@/components/Stepper';
 import {
   agregarSerie,
@@ -28,6 +29,7 @@ import {
   type EjercicioConStats,
   type SerieConNombre,
 } from '@/database/gym';
+import { getSetting, setSetting } from '@/database/queries';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, space } from '@/theme/tokens';
 import { toISODate } from '@/utils/fechas';
@@ -43,6 +45,17 @@ export function EntrenoScreen() {
   const [reps, setReps] = useState(10);
   const [peso, setPeso] = useState(20);
   const [series, setSeries] = useState<SerieConNombre[]>([]);
+  const [descanso, setDescanso] = useState(90);
+  const timer = useRef<RestTimerHandle>(null);
+
+  useEffect(() => {
+    getSetting(db, 'descanso_seg').then((v) => v && setDescanso(Number(v) || 90));
+  }, [db]);
+
+  const cambiarDescanso = (s: number) => {
+    setDescanso(s);
+    setSetting(db, 'descanso_seg', String(s)).catch(console.warn);
+  };
 
   const recargar = useCallback(async () => {
     setEjercicios(await listarEjercicios(db));
@@ -84,6 +97,7 @@ export function EntrenoScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setSeleccion(id);
     setNuevoNombre('');
+    timer.current?.iniciar(); // parte el descanso
     await recargar();
   };
 
@@ -146,6 +160,10 @@ export function EntrenoScreen() {
         </View>
 
         <Button label="Agregar serie" onPress={agregar} disabled={!puedeAgregar} style={{ marginTop: space.lg }} />
+
+        <View style={{ marginTop: space.md }}>
+          <RestTimer ref={timer} segundos={descanso} onCambiarSegundos={cambiarDescanso} />
+        </View>
 
         {/* Lo que llevas hoy */}
         <AppText variant="headline" style={{ marginTop: space.xxxl, marginBottom: space.md, marginLeft: space.xs }}>

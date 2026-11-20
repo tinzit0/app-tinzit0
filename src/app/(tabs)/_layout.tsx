@@ -8,6 +8,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
 import type { ComponentProps } from 'react';
 
+import { useLogros } from '@/components/LogrosProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fonts } from '@/theme/tokens';
 
@@ -24,9 +25,11 @@ const ICONS: Record<string, [IconName, IconName]> = {
 
 export default function TabsLayout() {
   const { colors } = useTheme();
+  const { revisar } = useLogros();
 
   return (
     <Tabs
+      screenListeners={{ focus: revisar }}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: colors.text,

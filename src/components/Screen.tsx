@@ -28,17 +28,19 @@ export function Screen({ title, eyebrow, right, children, scroll = true }: Props
 
   const header = (
     <View style={styles.header}>
-      <View style={styles.headerText}>
-        {eyebrow ? (
-          <AppText variant="overline" tone="tertiary" style={styles.eyebrow}>
-            {eyebrow}
+      {/* Fila superior: etiqueta a la izquierda, botones a la derecha */}
+      {eyebrow || right ? (
+        <View style={[styles.topRow, right ? { minHeight: 40 } : null]}>
+          <AppText variant="overline" tone="tertiary" style={{ flex: 1 }} numberOfLines={1}>
+            {eyebrow ?? ''}
           </AppText>
-        ) : null}
-        <AppText variant="display" accessibilityRole="header" numberOfLines={2}>
-          {title}
-        </AppText>
-      </View>
-      {right ? <View style={styles.right}>{right}</View> : null}
+          {right}
+        </View>
+      ) : null}
+      {/* El título usa todo el ancho */}
+      <AppText variant="display" accessibilityRole="header" numberOfLines={3}>
+        {title}
+      </AppText>
     </View>
   );
 
@@ -72,14 +74,6 @@ export function Screen({ title, eyebrow, right, children, scroll = true }: Props
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    marginBottom: space.xxl,
-    gap: space.md,
-  },
-  headerText: { flex: 1 },
-  eyebrow: { marginBottom: space.sm },
-  right: { paddingBottom: 4 },
+  header: { marginBottom: space.xxl, gap: space.sm },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
 });

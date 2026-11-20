@@ -13,6 +13,8 @@ import * as notas from '../src/database/notas';
 import * as fijos from '../src/database/fijos';
 import * as metas from '../src/database/metas';
 import * as cuerpo from '../src/database/cuerpo';
+import * as habitos from '../src/database/habitos';
+import * as logros from '../src/database/logros';
 import { mensajeDomingo, mensajeManana } from '../src/notifications/mensajes';
 import { getResumenHoy } from '../src/database/queries';
 import { toISODate, endOfWeek } from '../src/utils/fechas';
@@ -122,6 +124,26 @@ async function main() {
   assert.equal(med[0].weight, 78.4);
   assert.equal(med[0].waist, 84);
   assert.equal((await cuerpo.ultimosValores(db)).weight?.valor, 78.4);
+
+  // Hábitos: racha viva aunque hoy no esté marcado; mejor racha histórica
+  const hab = await habitos.crearHabito(db, { name: 'Agua', icon: 'water', color: '#38BDF8' });
+  const dia = (n: number) => toISODate(new Date(Date.now() - n * 86400000));
+  for (const n of [1, 2, 3, 10, 11]) await habitos.alternarHabito(db, hab, true, dia(n));
+  let hs = await habitos.listarHabitos(db);
+  assert.equal(hs[0].racha, 3);
+  assert.equal(hs[0].hechoHoy, false);
+  await habitos.alternarHabito(db, hab, true);
+  hs = await habitos.listarHabitos(db);
+  assert.equal(hs[0].racha, 4);
+  assert.equal(hs[0].mejorRacha, 4);
+  assert.equal(habitos.calcularMejorRacha(['2026-01-01', '2026-01-02', '2026-01-04']), 2);
+
+  // Logros: se desbloquean una sola vez
+  const nuevos = await logros.evaluarLogros(db);
+  const keys = nuevos.map((l) => l.key);
+  assert.ok(keys.includes('tarea_1') && keys.includes('gym_1') && keys.includes('cuerpo_1') && keys.includes('meta_1') === false);
+  assert.equal((await logros.evaluarLogros(db)).length, 0);
+  assert.equal((await logros.logrosSinVer(db)).length, nuevos.length);
 
   // Mensajes
   assert.ok(mensajeManana({ nombre: 'Tin', tareas: 2, gym: 'Pecho' }).cuerpo.includes('2 tareas'));

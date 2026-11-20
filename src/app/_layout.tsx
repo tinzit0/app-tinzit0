@@ -3,7 +3,7 @@
  * 1. Carga la tipografía Inter.
  * 2. Abre la base de datos y aplica las migraciones.
  * 3. Activa el tema claro/oscuro.
- * 4. Activa el bloqueo con huella (si lo encendiste en Ajustes).
+ * 4. Activa el bloqueo con huella (si lo encendiste en Ajustes) y los logros.
  * 5. Define la navegación: las pestañas + la pantalla de Ajustes encima.
  */
 import {
@@ -20,6 +20,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AppLifecycle } from '@/components/AppLifecycle';
 import { LockGate } from '@/components/LockGate';
+import { LogrosProvider, useLogros } from '@/components/LogrosProvider';
 import { migrateDb } from '@/database/schema';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { fonts } from '@/theme/tokens';
@@ -35,7 +36,9 @@ export default function RootLayout() {
       <ThemeProvider>
         <SQLiteProvider databaseName="tinzit0.db" onInit={migrateDb}>
           <LockGate>
-            <RootStack />
+            <LogrosProvider>
+              <RootStack />
+            </LogrosProvider>
           </LockGate>
         </SQLiteProvider>
       </ThemeProvider>
@@ -45,11 +48,14 @@ export default function RootLayout() {
 
 function RootStack() {
   const { colors, isDark } = useTheme();
+  const { revisar } = useLogros();
   return (
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <AppLifecycle />
       <Stack
+        // Cada vez que cambias de pantalla revisamos si ganaste alguna medalla.
+        screenListeners={{ focus: revisar }}
         screenOptions={{
           contentStyle: { backgroundColor: colors.bg },
           headerStyle: { backgroundColor: colors.bg },
@@ -74,6 +80,10 @@ function RootStack() {
         <Stack.Screen name="meta-form" options={{ presentation: 'modal', title: 'Meta' }} />
         <Stack.Screen name="cuerpo" options={{ title: 'Cuerpo' }} />
         <Stack.Screen name="medicion" options={{ presentation: 'modal', title: 'Medición' }} />
+        <Stack.Screen name="habitos" options={{ title: 'Hábitos' }} />
+        <Stack.Screen name="habito" options={{ title: 'Hábito' }} />
+        <Stack.Screen name="habito-form" options={{ presentation: 'modal', title: 'Hábito' }} />
+        <Stack.Screen name="logros" options={{ title: 'Medallas' }} />
       </Stack>
     </>
   );

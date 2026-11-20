@@ -1,7 +1,7 @@
 /**
  * Pantalla "Hoy": lo primero que ves al abrir la app.
- * Saludo según la hora, tareas del día, si toca gym, el gasto de la semana
- * y tus apps favoritas.
+ * Saludo según la hora, tareas del día, si toca gym, el gasto de la semana,
+ * tus hábitos y tus apps favoritas.
  */
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -14,7 +14,10 @@ import { Card } from '@/components/Card';
 import { IconButton } from '@/components/IconButton';
 import { ProgressBar } from '@/components/ProgressBar';
 import { Screen } from '@/components/Screen';
+import { HabitosHoy } from '@/components/HabitosHoy';
+import { useLogros } from '@/components/LogrosProvider';
 import { QuickApps } from '@/components/QuickApps';
+import { alternarHabito, listarHabitos, type HabitoConEstado } from '@/database/habitos';
 import { appsIniciales, listarApps, type AppFavorita } from '@/database/apps';
 import { getResumenHoy, type ResumenHoy } from '@/database/queries';
 import { necesitaRespaldo } from '@/database/respaldo';
@@ -30,12 +33,15 @@ export function HoyScreen() {
   const [data, setData] = useState<ResumenHoy | null>(null);
   const [pedirRespaldo, setPedirRespaldo] = useState(false);
   const [apps, setApps] = useState<AppFavorita[]>([]);
+  const [habitos, setHabitos] = useState<HabitoConEstado[]>([]);
+  const { revisar } = useLogros();
 
   // Cada vez que vuelves a esta pestaña, recargamos los datos.
   useFocusEffect(
     useCallback(() => {
       getResumenHoy(db).then(setData).catch(console.warn);
       necesitaRespaldo(db).then(setPedirRespaldo).catch(() => {});
+      listarHabitos(db).then(setHabitos).catch(console.warn);
       appsIniciales(db)
         .then(() => listarApps(db))
         .then(setApps)
@@ -52,7 +58,10 @@ export function HoyScreen() {
       eyebrow={fechaLarga(ahora)}
       title={titulo}
       right={
-        <IconButton icon="settings-outline" accessibilityLabel="Abrir ajustes" onPress={() => router.push('/ajustes')} />
+        <View style={styles.headerBtns}>
+          <IconButton icon="trophy-outline" accessibilityLabel="Ver medallas" onPress={() => router.push('/logros')} />
+          <IconButton icon="settings-outline" accessibilityLabel="Abrir ajustes" onPress={() => router.push('/ajustes')} />
+        </View>
       }
     >
       {/* Recordatorio semanal de respaldo */}
@@ -116,6 +125,19 @@ export function HoyScreen() {
         </Card>
       </View>
 
+      {/* Hábitos del día */}
+      <View style={{ marginTop: space.xxl }}>
+        <HabitosHoy
+          habitos={habitos}
+          onToggle={async (h) => {
+            setHabitos((hs) => hs.map((x) => (x.id === h.id ? { ...x, hechoHoy: !x.hechoHoy } : x)));
+            await alternarHabito(db, h.id, !h.hechoHoy);
+            setHabitos(await listarHabitos(db));
+            revisar();
+          }}
+        />
+      </View>
+
       {/* Accesos directos a tus apps */}
       {Platform.OS === 'android' && apps.length > 0 ? (
         <View style={{ marginTop: space.xxl }}>
@@ -132,5 +154,6 @@ const styles = StyleSheet.create({
   bigSuffix: { flexShrink: 1 },
   row: { flexDirection: 'row', gap: space.md, marginTop: space.md },
   half: { flex: 1 },
+  headerBtns: { flexDirection: 'row', gap: space.sm },
   banner: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg, marginBottom: space.md },
 });

@@ -17,18 +17,6 @@ export function GymScreen() {
   );
 }
 
-export function GastosScreen() {
-  return (
-    <Screen eyebrow="Finanzas" title="Gastos">
-      <EmptyState
-        icon="wallet-outline"
-        title="Tus lucas, bajo control"
-        description="Anota cada gasto y mira cuánto llevas en la semana y el mes."
-      />
-    </Screen>
-  );
-}
-
 export function NotasScreen() {
   return (
     <Screen eyebrow="Ideas" title="Notas">

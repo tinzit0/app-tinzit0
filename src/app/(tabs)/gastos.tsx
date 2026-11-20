@@ -1,2 +1,2 @@
 // Ruta de Expo Router: solo muestra la pantalla real que vive en src/screens.
-export { GastosScreen as default } from '@/screens/PlaceholderScreens';
+export { GastosScreen as default } from '@/screens/GastosScreen';

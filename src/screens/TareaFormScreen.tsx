@@ -31,6 +31,8 @@ const DIAS_LARGOS = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sáb
 export function TareaFormScreen() {
   const db = useSQLiteContext();
   const router = useRouter();
+  // Vuelve atrás; si no hay pantalla anterior (ej: se abrió por enlace), va al inicio.
+  const cerrar = () => (router.canGoBack() ? router.back() : router.replace('/'));
   const { colors } = useTheme();
   const params = useLocalSearchParams<{ id?: string; titulo?: string }>();
   const id = params.id ? Number(params.id) : null;
@@ -108,7 +110,7 @@ export function TareaFormScreen() {
     try {
       if (id) await actualizarTarea(db, id, datos);
       else await crearTarea(db, datos);
-      router.back();
+      cerrar();
     } finally {
       setGuardando(false);
     }
@@ -123,7 +125,7 @@ export function TareaFormScreen() {
         style: 'destructive',
         onPress: async () => {
           await eliminarTarea(db, id);
-          router.back();
+          cerrar();
         },
       },
     ]);

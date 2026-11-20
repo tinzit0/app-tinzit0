@@ -18,6 +18,7 @@ import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { AppLifecycle } from '@/components/AppLifecycle';
 import { LockGate } from '@/components/LockGate';
 import { migrateDb } from '@/database/schema';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
@@ -47,6 +48,7 @@ function RootStack() {
   return (
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
+      <AppLifecycle />
       <Stack
         screenOptions={{
           contentStyle: { backgroundColor: colors.bg },

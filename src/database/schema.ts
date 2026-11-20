@@ -99,6 +99,42 @@ const MIGRATIONS: string[] = [
     ('hora_noche', '21:30'),
     ('hora_domingo', '20:00');
   `,
+
+  // v2 — Gastos fijos mensuales y metas de ahorro.
+  `
+  CREATE TABLE IF NOT EXISTS fixed_expenses (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    name         TEXT NOT NULL,
+    amount       INTEGER NOT NULL,
+    category     TEXT NOT NULL DEFAULT 'suscripciones',
+    day_of_month INTEGER NOT NULL,              -- 1..31 (si el mes es más corto, se usa el último día)
+    active       INTEGER NOT NULL DEFAULT 1,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+
+  -- Registro de qué gastos fijos ya se sumaron cada mes (para no duplicar).
+  CREATE TABLE IF NOT EXISTS fixed_payments (
+    fixed_id   INTEGER NOT NULL REFERENCES fixed_expenses(id) ON DELETE CASCADE,
+    month      TEXT NOT NULL,                   -- 'YYYY-MM'
+    expense_id INTEGER,
+    PRIMARY KEY (fixed_id, month)
+  );
+
+  CREATE TABLE IF NOT EXISTS savings_goals (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL,
+    target     INTEGER NOT NULL,
+    deadline   TEXT,                            -- 'YYYY-MM-DD' o NULL
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+
+  CREATE TABLE IF NOT EXISTS goal_contributions (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    goal_id INTEGER NOT NULL REFERENCES savings_goals(id) ON DELETE CASCADE,
+    amount  INTEGER NOT NULL,                   -- puede ser negativo (retiro)
+    date    TEXT NOT NULL
+  );
+  `,
 ];
 
 /** Se llama una vez al abrir la app (desde SQLiteProvider en el _layout raíz). */

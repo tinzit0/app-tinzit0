@@ -1,6 +1,5 @@
 /**
- * Ajustes: perfil, presupuesto, seguridad (huella), respaldo y apariencia.
- * (Las horas de notificaciones se suman en la Fase 5.)
+ * Ajustes: perfil, notificaciones, presupuesto, seguridad (huella), respaldo y apariencia.
  */
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
@@ -10,6 +9,7 @@ import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { useLock } from '@/components/LockGate';
+import { NotifSettings } from '@/components/NotifSettings';
 import { SegmentedControl } from '@/components/SegmentedControl';
 import { getSetting, setSetting } from '@/database/queries';
 import { elegirRespaldo, exportarRespaldo, restaurarRespaldo } from '@/database/respaldo';
@@ -110,6 +110,10 @@ export function AjustesScreen() {
           accessibilityLabel="Tu nombre"
           style={inputStyle}
         />
+      </Section>
+
+      <Section title="Notificaciones">
+        <NotifSettings />
       </Section>
 
       <Section title="Gastos">

@@ -10,6 +10,9 @@ import * as tareas from '../src/database/tareas';
 import * as gastos from '../src/database/gastos';
 import * as gym from '../src/database/gym';
 import * as notas from '../src/database/notas';
+import * as fijos from '../src/database/fijos';
+import * as metas from '../src/database/metas';
+import { mensajeDomingo, mensajeManana } from '../src/notifications/mensajes';
 import { getResumenHoy } from '../src/database/queries';
 import { toISODate, endOfWeek } from '../src/utils/fechas';
 
@@ -91,8 +94,31 @@ async function main() {
   assert.equal(await notas.guardarNota(db, n, '   '), null);
   assert.equal((await notas.listarNotas(db)).length, 0);
 
+  // Gastos fijos: el de hoy se suma una sola vez; el de mañana todavía no.
+  const hoyD = new Date();
+  await fijos.crearFijo(db, { name: 'Spotify', amount: 6490, category: 'suscripciones', day_of_month: hoyD.getDate() });
+  const manana = new Date(Date.now() + 86400000);
+  if (manana.getMonth() === hoyD.getMonth()) {
+    await fijos.crearFijo(db, { name: 'Arriendo', amount: 300000, category: 'hogar', day_of_month: manana.getDate() });
+    assert.equal((await fijos.fijosQueVencenEn(db, manana)).length, 1);
+  }
+  assert.equal(await fijos.aplicarFijosDelMes(db), 1);
+  assert.equal(await fijos.aplicarFijosDelMes(db), 0);
+  assert.equal(fijos.diaDePagoEn({ day_of_month: 31 }, 2026, 1), 28);
+
+  // Metas
+  const meta = await metas.crearMeta(db, { name: 'Viaje al sur', target: 500000, deadline: null });
+  await metas.abonar(db, meta, 10000);
+  await metas.abonar(db, meta, 5000);
+  assert.equal((await metas.obtenerMeta(db, meta))!.ahorrado, 15000);
+  assert.equal((await metas.buscarMeta(db, 'abona a viaje'))!.id, meta);
+
+  // Mensajes
+  assert.ok(mensajeManana({ nombre: 'Tin', tareas: 2, gym: 'Pecho' }).cuerpo.includes('2 tareas'));
+  assert.ok(mensajeDomingo({ tareas: 5, gym: 2, gasto: 10000, gastoAnterior: 15000, pedirRespaldo: false }).cuerpo.includes('menos'));
+
   const r = await getResumenHoy(db);
-  assert.equal(r.gastoSemana, 7500);
+  assert.equal(r.gastoSemana, 7500 + 6490);
   console.log('✅ Todas las pruebas de base de datos pasaron');
 }
 

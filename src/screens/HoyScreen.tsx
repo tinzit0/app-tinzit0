@@ -1,6 +1,6 @@
 /**
  * Pantalla "Hoy": lo primero que ves al abrir la app.
- * Saludo según la hora, tareas del día, si toca gym, el gasto de la semana,
+ * Saludo según la hora, clima, tareas del día, si toca gym, el gasto de la semana,
  * tus hábitos y tus apps favoritas.
  */
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -15,6 +15,8 @@ import { Fab } from '@/components/Fab';
 import { IconButton } from '@/components/IconButton';
 import { ProgressBar } from '@/components/ProgressBar';
 import { Screen } from '@/components/Screen';
+import { obtenerClima, type Pronostico } from '@/clima/clima';
+import { ClimaCard } from '@/components/ClimaCard';
 import { HabitosHoy } from '@/components/HabitosHoy';
 import { useLogros } from '@/components/LogrosProvider';
 import { QuickApps } from '@/components/QuickApps';
@@ -36,6 +38,8 @@ export function HoyScreen() {
   const [pedirRespaldo, setPedirRespaldo] = useState(false);
   const [apps, setApps] = useState<AppFavorita[]>([]);
   const [habitos, setHabitos] = useState<HabitoConEstado[]>([]);
+  const [clima, setClima] = useState<Pronostico | null>(null);
+  const [climaCargado, setClimaCargado] = useState(false);
   const { revisar } = useLogros();
 
   // Cada vez que vuelves a esta pestaña, recargamos los datos.
@@ -44,6 +48,12 @@ export function HoyScreen() {
       getResumenHoy(db).then(setData).catch(console.warn);
       necesitaRespaldo(db).then(setPedirRespaldo).catch(() => {});
       listarHabitos(db).then(setHabitos).catch(console.warn);
+      obtenerClima(db)
+        .then((c) => {
+          setClima(c);
+          setClimaCargado(true);
+        })
+        .catch(() => setClimaCargado(true));
       appsIniciales(db)
         .then(() => listarApps(db))
         .then(setApps)
@@ -81,6 +91,13 @@ export function HoyScreen() {
           </Card>
         ) : null}
   
+        {/* Clima */}
+        {climaCargado ? (
+          <View style={{ marginBottom: space.md }}>
+            <ClimaCard p={clima} />
+          </View>
+        ) : null}
+
         {/* Tareas de hoy: la tarjeta principal */}
         <Card onPress={() => router.navigate('/tareas')} accessibilityLabel="Ver tareas de hoy">
           <View style={styles.cardTop}>

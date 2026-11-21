@@ -2,7 +2,7 @@
   "expo": {
     "name": "Tinzit0",
     "slug": "tinzit0",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -83,6 +83,12 @@
               "previewImage": "./assets/widget-preview.png"
             }
           ]
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Tinzit0 usa tu ubicación aproximada solo para mostrarte el clima de tu ciudad."
         }
       ]
     ],

@@ -3,6 +3,8 @@
  * - Toca el micrófono (o di "ey Tinzit0" si lo activaste) y habla.
  * - También puedes escribir (sirve en Expo Go, donde no hay reconocimiento de voz).
  * - Responde con texto y con voz. El historial del día queda guardado.
+ * - Con la IA activada (Ajustes → Asistente), Claude entiende cualquier frase;
+ *   si no hay internet, responde el intérprete local.
  */
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
@@ -20,9 +22,11 @@ import { MicOrb } from '@/components/MicOrb';
 import { getSetting } from '@/database/queries';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, space, type } from '@/theme/tokens';
-import { guardarMensaje, mensajesDeHoy, responder, type MensajeChat } from '@/voice/ejecutar';
+import { ejecutarAccion } from '@/voice/acciones';
+import { guardarMensaje, mensajesDeHoy, responder, type Accion, type MensajeChat } from '@/voice/ejecutar';
 import { callar, hablar } from '@/voice/hablar';
-import { EJEMPLOS } from '@/voice/interpretar';
+import { iaActivada } from '@/voice/iaConfig';
+import { EJEMPLOS, type TipoIntencion } from '@/voice/interpretar';
 import { escuchar, pedirPermisoMicrofono, vozDisponible, type Escucha } from '@/voice/reconocedor';
 import { useVoz } from '@/voice/VozProvider';
 
@@ -36,6 +40,9 @@ const NOMBRES_RUTA: Record<string, string> = {
   '/metas': 'Ver metas',
   '/cuerpo': 'Ver peso',
   '/ajustes': 'Abrir ajustes',
+  '/clima': 'Ver clima',
+  '/notas': 'Ver notas',
+  '/estadisticas': 'Ver estadísticas',
 };
 
 export function AsistenteScreen() {
@@ -56,11 +63,13 @@ export function AsistenteScreen() {
   const escucha = useRef<Escucha | null>(null);
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
   const vozOn = useRef(true);
+  const [modoIA, setModoIA] = useState(false);
 
   // Mientras el asistente está abierto, no escuchamos "ey Tinzit0" de fondo.
   useEffect(() => {
     pausarActivacion(true);
     getSetting(db, 'voz_respuesta').then((v) => (vozOn.current = v !== '0'));
+    iaActivada(db).then(setModoIA).catch(() => {});
     mensajesDeHoy(db).then(setMensajes).catch(console.warn);
     return () => {
       pausarActivacion(false);
@@ -69,25 +78,62 @@ export function AsistenteScreen() {
     };
   }, [db, pausarActivacion]);
 
+  // Copia de los mensajes para leerlos dentro de procesar() sin quedar desactualizada.
+  const mensajesRef = useRef<Burbuja[]>([]);
+  useEffect(() => {
+    mensajesRef.current = mensajes;
+  }, [mensajes]);
+  // Lo último que se habló (para "¿y mañana?" en el modo sin internet).
+  const ultimo = useRef<TipoIntencion | null>(null);
+
   const procesar = useCallback(
     async (frase: string) => {
       const limpio = frase.trim();
       if (!limpio) return;
       const ahora = new Date().toISOString();
+      const historial = mensajesRef.current;
       setMensajes((m) => [...m, { id: Date.now(), role: 'user', text: limpio, created_at: ahora }]);
       setPensando(true);
       try {
         await guardarMensaje(db, 'user', limpio);
-        const r = await responder(db, limpio);
-        await guardarMensaje(db, 'bot', r.texto);
-        setMensajes((m) => [...m, { id: Date.now() + 1, role: 'bot', text: r.texto, created_at: ahora, ruta: r.ruta }]);
-        if (vozOn.current && Platform.OS !== 'web') hablar(r.texto).catch(() => {});
+
+        let texto = '';
+        let ruta: string | undefined;
+        let acciones: Accion[] = [];
+        let aviso: string | null = null;
+
+        // 1) Con IA activada: Claude entiende la frase y usa las herramientas.
+        if (await iaActivada(db)) {
+          // El SDK de Claude se carga recién aquí (no al abrir la app).
+          const { preguntarIA, explicarErrorIA } = await import('@/voice/ia');
+          try {
+            const ia = await preguntarIA(db, limpio, historial);
+            texto = ia.texto;
+            acciones = ia.acciones;
+            ultimo.current = null;
+          } catch (e) {
+            aviso = explicarErrorIA(e);
+          }
+        }
+        // 2) Sin IA (o si falló): el intérprete local, sin internet.
+        if (!texto) {
+          const r = await responder(db, limpio, { ultimo: ultimo.current });
+          texto = aviso ? `${r.texto}\n\n(${aviso})` : r.texto;
+          ruta = r.ruta;
+          acciones = r.accion ? [r.accion] : [];
+          ultimo.current = r.intencion ?? null;
+        }
+
+        await guardarMensaje(db, 'bot', texto);
+        setMensajes((m) => [...m, { id: Date.now() + 1, role: 'bot', text: texto, created_at: ahora, ruta }]);
+        if (vozOn.current && Platform.OS !== 'web') hablar(texto).catch(() => {});
+        for (const a of acciones) ejecutarAccion(a, router).catch(console.warn);
         revisar(true);
       } finally {
         setPensando(false);
       }
     },
-    [db, revisar],
+    [db, revisar, router],
   );
 
   const empezar = useCallback(async () => {
@@ -152,7 +198,7 @@ export function AsistenteScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Tinzit0' }} />
+      <Stack.Screen options={{ title: modoIA ? 'Tinzit0 · IA ✨' : 'Tinzit0' }} />
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: colors.bg }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

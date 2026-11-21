@@ -99,6 +99,7 @@ function RootStack() {
         <Stack.Screen name="logros" options={{ title: 'Medallas' }} />
         <Stack.Screen name="estadisticas" options={{ title: 'Estadísticas' }} />
         <Stack.Screen name="asistente" options={{ title: 'Tinzit0' }} />
+        <Stack.Screen name="clima" options={{ title: 'Clima' }} />
       </Stack>
     </>
   );

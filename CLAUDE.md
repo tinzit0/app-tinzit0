@@ -20,11 +20,12 @@ App móvil **personal** (un solo usuario, Android) para organizar el día: tarea
 ```bash
 npx expo start            # dev server (Expo Go o development build)
 npx expo start --web      # vista previa en navegador (para revisar UI con Playwright)
-npm test                  # pruebas: base de datos (node:sqlite) + asistente (39 frases)
+npm test                  # pruebas: base de datos (node:sqlite) + asistente (90 casos)
+npx tsx scripts/test-clima.ts  # prueba real contra Open-Meteo (necesita internet)
 npx tsc --noEmit          # chequeo de tipos
 npx expo-doctor           # salud de dependencias
 npx expo install <pkg>    # SIEMPRE así (no npm install) para versiones compatibles
-eas build --profile development --platform android   # APK del development build
+npx eas-cli build -p android --profile preview --non-interactive --no-wait   # APK instalable (cuenta EAS: tinzit0)
 node scripts/generar-iconos.mjs <grafito|lima|noche|todos|widget> <carpeta-con-@resvg/resvg-js>
 ```
 
@@ -44,9 +45,12 @@ src/database/            acceso a datos por módulo (tareas, gastos, fijos, meta
                          habitos, logros, notas, apps, respaldo, estadisticas, queries=settings)
   schema.ts              MIGRACIONES versionadas con PRAGMA user_version (v1…v5)
 src/notifications/       mensajes.ts (personalidad) + programar.ts (agenda 7 días)
-src/voice/               texto.ts (normalizar, "ey Tinzit0"), interpretar.ts (NLU local, puro),
-                         ejecutar.ts (acciones + respuestas + historial), reconocedor.ts, hablar.ts,
-                         VozProvider.tsx (wake word con app abierta), ia.ts (stub IA futura)
+src/voice/               texto.ts (normalizar, "ey Tinzit0"), interpretar.ts (NLU local, puro, ~40 intenciones + contexto),
+                         ejecutar.ts (acciones + respuestas + historial; devuelve "accion" para la UI),
+                         acciones.ts (navegar / abrir app / recordatorio), reconocedor.ts, hablar.ts,
+                         VozProvider.tsx (wake word con app abierta), resumen.ts (datos para la IA),
+                         ia.ts (Claude claude-opus-5-5 + Tool Runner, carga diferida), iaConfig.ts (API key en SecureStore)
+src/clima/clima.ts       Open-Meteo (sin key), caché 30 min en settings, Concepción por defecto
 src/widget/              datos.ts, ResumenWidget.tsx, lib.ts (carga segura), index.tsx
 src/theme/               tokens.ts, ThemeProvider.tsx (sistema/claro/oscuro)
 src/utils/               fechas (semana parte lunes), moneda (formatCLP), montos (parseMonto a la chilena),
@@ -64,7 +68,9 @@ docs/propuestas-icono.png  3 estilos de ícono (por defecto: 1 "Grafito + Lima")
 - Animaciones: Reanimated, solo `transform`/`opacity`, curva `Easing.bezier(0.23, 1, 0.32, 1)`, respetar "reducir movimiento". Sin animación en cambios de pestaña. Hápticos solo en eventos con significado.
 - Notificaciones: `reprogramarTodo` borra todo lo agendado **excepto** `data.tipo === 'descanso'` (temporizador).
 - Gráficos de categorías: siempre en el orden fijo de `CATEGORIAS`, colores con `colorCategoria(c, isDark)`.
-- Nueva intención del asistente: agregarla en `interpretar.ts` + `ejecutar.ts` + un caso en `scripts/test-voz.ts`.
+- Nueva intención del asistente: agregarla en `interpretar.ts` + `ejecutar.ts` + (si es una acción) una herramienta en `ia.ts` + un caso en `scripts/test-voz.ts`.
+- **SDK de Anthropic + Metro**: su build ESM tiene importaciones circulares que caen en runtime. `metro.config.js` fuerza la versión CommonJS (`isESMImport: false`). No quitarlo. `ia.ts` solo se importa con `await import()` para no cargar el SDK al abrir la app.
+- Notificaciones con `data.tipo` `descanso` o `recordatorio` no se borran al reprogramar.
 - Correr `npx tsc --noEmit` y `npm test` antes de cada commit. Revisar UI con Playwright en 375 px (modo claro y oscuro).
 
 ## Funciones (estado al 2026-11-20)
@@ -74,13 +80,12 @@ Tareas (hoy/semana/todas, prioridad, repetición diaria o por días) · Gastos (
 presupuesto con aviso 80/100 %, gastos fijos con cobro automático, metas de ahorro con abonos) · Gym (rutina
 semanal, series/reps/peso, historial y gráfico, temporizador de descanso 60/90/120 s, peso y medidas) · Notas ·
 Hábitos (rachas, mapa de calor) · 16 logros con celebración · Estadísticas mensuales vs mes anterior ·
-Notificaciones (mañana, noche, domingo, pagos fijos; horas configurables) · Respaldo JSON exportar/importar +
-recordatorio semanal · Bloqueo con huella · Asistente de voz/texto con "ey Tinzit0" (app abierta) · Widget Android ·
+Notificaciones (mañana con clima, noche, domingo, pagos fijos; horas configurables) · Respaldo JSON exportar/importar +
+recordatorio semanal · Bloqueo con huella · Asistente de voz/texto con "ey Tinzit0" (app abierta), ~40 comandos sin internet y modo IA opcional con Claude (API key del usuario) · Clima (Open-Meteo) · Widget Android ·
 Ícono y splash.
 
 ## Pendiente / ideas
 
 - Elegir estilo de ícono definitivo (ver `docs/propuestas-icono.png`).
 - Agregar la app del banco del usuario al catálogo de `src/utils/apps.ts` (+ `plugins/withAppQueries.js`).
-- Fase 2 opcional: chat con IA (Claude) en `src/voice/ia.ts`, API key en SecureStore.
 - Activación por voz con la app cerrada (servicio nativo / Picovoice Porcupine).

@@ -112,3 +112,8 @@ export function avisoPresupuesto(antes: number, despues: number, presupuesto: nu
   if (a < 0.8 && d >= 0.8) return 'Ojo: ya llevas más del 80% del presupuesto semanal. Vamos con calma 👀';
   return null;
 }
+
+/** El último gasto anotado (para "borra el último gasto"). */
+export async function ultimoGasto(db: SQLiteDatabase): Promise<Gasto | null> {
+  return db.getFirstAsync<Gasto>('SELECT * FROM expenses ORDER BY id DESC LIMIT 1');
+}

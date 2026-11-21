@@ -230,3 +230,8 @@ export function describirCuando(t: Pick<Tarea, 'repeat_type' | 'repeat_days' | '
   const d = fromISODate(t.due_date);
   return `${CORTOS[weekdayMonFirst(d)]} ${d.getDate()}/${d.getMonth() + 1}`;
 }
+
+/** Cambia la fecha de una tarea de una vez (la deja como tarea de ese día). */
+export async function moverTarea(db: SQLiteDatabase, id: number, fechaISO: string): Promise<void> {
+  await db.runAsync(`UPDATE tasks SET due_date = ?, scope = 'diaria' WHERE id = ? AND repeat_type = 'none'`, fechaISO, id);
+}

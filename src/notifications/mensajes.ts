@@ -15,7 +15,7 @@ function plural(n: number, uno: string, varios: string) {
 
 // ---------- Mañana ----------
 
-export function mensajeManana(p: { nombre: string; tareas: number; gym: string | null }) {
+export function mensajeManana(p: { nombre: string; tareas: number; gym: string | null; clima?: string | null }) {
   const hola = p.nombre ? `Buenos días, ${p.nombre}` : 'Buenos días';
   const titulo = alAzar([`${hola} ☀️`, `${hola}! Arriba ese ánimo ☀️`, `${hola} 👋`]);
 
@@ -28,7 +28,10 @@ export function mensajeManana(p: { nombre: string; tareas: number; gym: string |
   if (p.gym) partes.push(alAzar([`toca ${p.gym.toLowerCase()} en el gym 💪`, `y hoy es día de ${p.gym.toLowerCase()} 🏋️`]));
   else partes.push(alAzar(['y hoy es día de descanso del gym', 'sin gym hoy, a recargar pilas']));
 
-  return { titulo, cuerpo: `${partes.join(', ')}. ${alAzar(['¡Vamos con todo!', 'Tú puedes.', 'A darle.'])}` };
+  const cierre = alAzar(['¡Vamos con todo!', 'Tú puedes.', 'A darle.']);
+  // El clima va primero y en su propia línea: es lo primero que uno quiere saber al despertar.
+  const linea = `${partes.join(', ')}. ${cierre}`;
+  return { titulo, cuerpo: p.clima ? `${p.clima}\n${linea}` : linea };
 }
 
 // ---------- Noche ----------

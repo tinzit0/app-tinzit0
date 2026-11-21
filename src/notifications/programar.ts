@@ -19,6 +19,7 @@ import { diasEntrenados, rutinaDeHoy } from '@/database/gym';
 import { getSetting } from '@/database/queries';
 import { necesitaRespaldo } from '@/database/respaldo';
 import { completadasEnRango, tareasDelDia } from '@/database/tareas';
+import { consejoClima, diaDe, obtenerClima, resumenCorto } from '@/clima/clima';
 import { toISODate, weekdayMonFirst } from '@/utils/fechas';
 import { mensajeDomingo, mensajeGastoFijo, mensajeManana, mensajeNoche, MENSAJE_PRUEBA } from './mensajes';
 
@@ -81,12 +82,12 @@ export function reprogramarTodo(db: SQLiteDatabase): Promise<void> {
   enCurso = (async () => {
     try {
       if (!(await prepararNotificaciones(false))) return;
-      // Borramos solo los avisos "de agenda". El del temporizador de descanso se respeta
+      // Borramos solo los avisos "de agenda". El temporizador de descanso y los recordatorios por voz se respetan
       // (si no, al salir de la app durante el descanso, la alarma desaparecería).
       const agendadas = await Notifications.getAllScheduledNotificationsAsync();
       await Promise.all(
         agendadas
-          .filter((n) => n.content.data?.tipo !== 'descanso')
+          .filter((n) => n.content.data?.tipo !== 'descanso' && n.content.data?.tipo !== 'recordatorio')
           .map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)),
       );
 
@@ -102,6 +103,9 @@ export function reprogramarTodo(db: SQLiteDatabase): Promise<void> {
         on('notif_fijos'),
       ]);
 
+      // Pronóstico de 7 días (del caché o de internet). Si no hay conexión, las notificaciones van sin clima.
+      const pronostico = await obtenerClima(db).catch(() => null);
+
       const hoy = new Date();
       for (let i = 0; i < DIAS_ADELANTE; i++) {
         const dia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + i);
@@ -111,7 +115,9 @@ export function reprogramarTodo(db: SQLiteDatabase): Promise<void> {
 
         if (onManana) {
           const gym = await rutinaDeHoy(db, dia);
-          const m = mensajeManana({ nombre, tareas: pendientes, gym });
+          const d = pronostico ? diaDe(pronostico, iso) : null;
+          const clima = d ? `${resumenCorto(d)}${consejoClima(d) ? ` · ${consejoClima(d)}` : ''}` : null;
+          const m = mensajeManana({ nombre, tareas: pendientes, gym, clima });
           await agendar(m.titulo, m.cuerpo, enFecha(dia, manana.h, manana.m), { ruta: '/' });
         }
         if (onNoche && pendientes > 0) {

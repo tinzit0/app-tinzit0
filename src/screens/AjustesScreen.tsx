@@ -11,6 +11,7 @@ import { Card } from '@/components/Card';
 import { useLock } from '@/components/LockGate';
 import { NotifSettings } from '@/components/NotifSettings';
 import { AsistenteSettings } from '@/components/AsistenteSettings';
+import { ClimaSettings } from '@/components/ClimaSettings';
 import { SegmentedControl } from '@/components/SegmentedControl';
 import { getSetting, setSetting } from '@/database/queries';
 import { elegirRespaldo, exportarRespaldo, restaurarRespaldo } from '@/database/respaldo';
@@ -119,6 +120,10 @@ export function AjustesScreen() {
 
       <Section title="Asistente de voz">
         <AsistenteSettings />
+      </Section>
+
+      <Section title="Clima">
+        <ClimaSettings />
       </Section>
 
       <Section title="Gastos">

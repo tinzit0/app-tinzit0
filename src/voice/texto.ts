@@ -9,7 +9,11 @@ export function normalizar(s: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
-    .replace(/[¿?¡!.,;:"“”()]/g, ' ')
+    // Números: 5.000 → 5000 y 78,5 → 78.5 (antes de quitar la puntuación)
+    .replace(/(\d)\.(\d{3})(?!\d)/g, '$1$2')
+    .replace(/(\d),(\d)/g, '$1.$2')
+    .replace(/(?<!\d)[.,]|[.,](?!\d)/g, ' ')
+    .replace(/[¿?¡!;:"“”()]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }

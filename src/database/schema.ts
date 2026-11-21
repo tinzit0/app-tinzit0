@@ -297,6 +297,35 @@ const MIGRATIONS: string[] = [
   INSERT OR IGNORE INTO settings (key, value) VALUES
     ('gastos_auto_modo', 'preguntar'), ('asistencia_auto', '0'), ('campus_radio', '300');
   `,
+
+  // v9 — Bienestar: tarjeta diaria (estilo DBT) y sesiones de calma / impulsos surfeados.
+  `
+  CREATE TABLE IF NOT EXISTS diary_cards (
+    date        TEXT PRIMARY KEY NOT NULL,        -- un registro por día
+    animo       INTEGER,                          -- 0 (muy mal) … 10 (muy bien)
+    emociones   TEXT NOT NULL DEFAULT '{}',       -- JSON {tristeza: 0-5, rabia: 0-5, …}
+    impulso     INTEGER,                          -- ganas de hacer algo impulsivo 0-5
+    actue       INTEGER NOT NULL DEFAULT 0,       -- 1 = actué por impulso
+    habilidades TEXT NOT NULL DEFAULT '[]',       -- JSON ['tipp', 'stop', …]
+    sueno       REAL,                             -- horas dormidas
+    nota        TEXT,
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+
+  CREATE TABLE IF NOT EXISTS calm_sessions (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    date       TEXT NOT NULL,
+    tipo       TEXT NOT NULL,                     -- 'calma' | 'impulso'
+    antes      INTEGER,                           -- intensidad 0-10 al empezar
+    despues    INTEGER,                           -- intensidad 0-10 al terminar
+    logrado    INTEGER,                           -- impulso: 1 = no actué
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_calm_date ON calm_sessions(date);
+
+  INSERT OR IGNORE INTO settings (key, value) VALUES
+    ('notif_tarjeta', '1'), ('hora_tarjeta', '22:00'), ('bienestar_bloqueo', '0');
+  `,
 ];
 
 /** Se llama una vez al abrir la app (desde SQLiteProvider en el _layout raíz). */

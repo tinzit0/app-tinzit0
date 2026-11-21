@@ -151,6 +151,21 @@ export const CORPUS: GrupoCorpus[] = [
     ejemplos: ['qué hice esta semana', 'balance semanal', 'cómo estuvo la semana', 'resumen semanal'],
   },
   {
+    comando: 'estoy a mil',
+    etiqueta: 'Bajar la intensidad (Estoy a mil)',
+    ejemplos: ['estoy pésimo', 'no me siento bien', 'estoy angustiado', 'estoy angustiada', 'me siento horrible', 'tengo pena', 'estoy triste', 'ayúdame', 'estoy nervioso', 'estoy nerviosa'],
+  },
+  {
+    comando: 'tengo ganas de hacer una tontera',
+    etiqueta: 'Surfear un impulso',
+    ejemplos: ['quiero hacer algo que me voy a arrepentir', 'tengo un impulso fuerte', 'me dan ganas de mandarlo todo a la cresta', 'no me puedo aguantar'],
+  },
+  {
+    comando: 'llenar mi tarjeta diaria',
+    etiqueta: 'Tu tarjeta diaria',
+    ejemplos: ['cómo me siento hoy', 'registrar cómo estoy', 'anotar mis emociones', 'diario de emociones'],
+  },
+  {
     comando: 'cuánto puedo gastar hoy',
     etiqueta: 'Cuánto puedes gastar hoy',
     ejemplos: ['cuánto me queda para hoy', 'me queda plata', 'puedo comprarme algo', 'tengo plata para salir', 'cuánto tengo disponible'],

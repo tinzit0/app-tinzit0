@@ -120,3 +120,22 @@ export function mensajePrueba(p: { nombre: string; ramo: string; manana: boolean
 export function mensajePreguntaAsistencia(p: { ramo: string }) {
   return { titulo: `¿Fuiste a ${p.ramo}?`, cuerpo: 'No te detecté en la U durante la clase. Toca para anotar tu asistencia.' };
 }
+
+// ---------- Bienestar (textos discretos: se ven en la pantalla bloqueada) ----------
+
+export function mensajeTarjeta() {
+  return alAzar([
+    { titulo: '¿Cómo estuvo tu día?', cuerpo: 'Anótalo en 30 segundos. Solo tú lo ves.' },
+    { titulo: 'Un minuto para ti', cuerpo: '¿Cómo te sentiste hoy? Llena tu tarjeta antes de dormir.' },
+    { titulo: 'Cierra el día', cuerpo: 'Tu tarjeta de hoy te está esperando.' },
+  ]);
+}
+
+export function mensajeApoyo(p: { nombre: string }) {
+  const n = p.nombre ? `, ${p.nombre}` : '';
+  return alAzar([
+    { titulo: `Aquí estoy${n}`, cuerpo: 'Si hoy se pone difícil, tienes "Estoy a mil" a un toque. Vas bien.' },
+    { titulo: `Un recordatorio${n}`, cuerpo: 'Sé amable contigo hoy. Haz una cosa chica que te guste.' },
+    { titulo: 'Respira', cuerpo: 'Tómate un minuto para respirar lento. Te acompaño si quieres.' },
+  ]);
+}

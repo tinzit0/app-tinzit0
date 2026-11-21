@@ -114,6 +114,13 @@ function RootStack() {
         <Stack.Screen name="gastos-banco" options={{ title: 'Gastos del banco' }} />
         <Stack.Screen name="boleta" options={{ title: 'Escanear boleta' }} />
         <Stack.Screen name="campus" options={{ title: 'Asistencia automática' }} />
+        <Stack.Screen name="bienestar" options={{ title: 'Bienestar' }} />
+        <Stack.Screen name="calma" options={{ title: 'Estoy a mil' }} />
+        <Stack.Screen name="impulso" options={{ title: 'Surfear impulso' }} />
+        <Stack.Screen name="tarjeta-diaria" options={{ title: 'Tarjeta diaria' }} />
+        <Stack.Screen name="patrones" options={{ title: 'Tus patrones' }} />
+        <Stack.Screen name="plan-crisis" options={{ title: 'Plan de crisis' }} />
+        <Stack.Screen name="habilidades" options={{ title: 'Habilidades' }} />
       </Stack>
     </>
   );

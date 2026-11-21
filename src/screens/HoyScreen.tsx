@@ -26,6 +26,9 @@ import { proximasEvaluaciones, todosLosBloques, type BloqueConRamo, type Evaluac
 import { claseAhora } from '@/estudio/logica';
 import { getResumenHoy, type ResumenHoy } from '@/database/queries';
 import { obtenerProyeccion } from '@/database/finanzas';
+import { obtenerTarjeta } from '@/database/bienestar';
+import { textoAnimo } from '@/bienestar/logica';
+import { PressableScale } from '@/components/PressableScale';
 import { necesitaRespaldo } from '@/database/respaldo';
 import { useTheme } from '@/theme/ThemeProvider';
 import { space } from '@/theme/tokens';
@@ -48,6 +51,7 @@ export function HoyScreen() {
   const [bloques, setBloques] = useState<BloqueConRamo[]>([]);
   const [prueba, setPrueba] = useState<EvaluacionConRamo | null>(null);
   const [quedaHoy, setQuedaHoy] = useState<number | null>(null);
+  const [animoHoy, setAnimoHoy] = useState<number | null>(null);
   const { revisar } = useLogros();
 
   // Cada vez que vuelves a esta pestaña, recargamos los datos.
@@ -63,6 +67,9 @@ export function HoyScreen() {
         })
         .catch(() => setClimaCargado(true));
       todosLosBloques(db).then(setBloques).catch(console.warn);
+      obtenerTarjeta(db)
+        .then((t) => setAnimoHoy(t?.animo ?? null))
+        .catch(() => {});
       obtenerProyeccion(db)
         .then((p) => setQuedaHoy(p.quedaHoy))
         .catch(() => {});
@@ -196,6 +203,24 @@ export function HoyScreen() {
           </AppText>
         </Card>
 
+        {/* Bienestar */}
+        <Card onPress={() => router.push('/bienestar')} accessibilityLabel="Abrir Bienestar" style={[styles.banner, { marginTop: space.md, marginBottom: 0 }]}>
+          <Ionicons name="leaf-outline" size={20} color={colors.accent} />
+          <View style={{ flex: 1 }}>
+            <AppText variant="callout">{animoHoy != null ? `Hoy: ${textoAnimo(animoHoy).toLowerCase()} (${animoHoy}/10)` : '¿Cómo estás hoy?'}</AppText>
+            <AppText variant="caption" tone="tertiary">Bienestar</AppText>
+          </View>
+          <PressableScale
+            accessibilityRole="button"
+            accessibilityLabel="Estoy a mil"
+            onPress={() => router.push('/calma')}
+            hitSlop={6}
+            style={[styles.pildora, { backgroundColor: colors.accentSoft }]}
+          >
+            <AppText variant="caption" tone="accent">Estoy a mil</AppText>
+          </PressableScale>
+        </Card>
+
         {/* Música (Spotify) */}
         <Card onPress={() => router.push('/musica')} accessibilityLabel="Música" style={[styles.banner, { marginTop: space.sm, marginBottom: 0 }]}>
           <Ionicons name="musical-notes-outline" size={20} color={colors.accent} />
@@ -236,5 +261,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: space.md, marginTop: space.md },
   half: { flex: 1 },
   headerBtns: { flexDirection: 'row', gap: space.sm },
+  pildora: { paddingHorizontal: space.md, paddingVertical: space.sm, borderRadius: 999, minHeight: 36, justifyContent: 'center' },
   banner: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg, marginBottom: space.md },
 });

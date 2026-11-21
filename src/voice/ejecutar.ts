@@ -26,6 +26,8 @@ import {
 } from '@/database/gastos';
 import { compararMes } from '@/database/estadisticas';
 import { contarAvisosPendientes, obtenerProyeccion } from '@/database/finanzas';
+import { detectarRiesgo, textoAnimo } from '@/bienestar/logica';
+import { obtenerPlan, registrarAnimo } from '@/database/bienestar';
 import { diaDePagoEn, listarFijos } from '@/database/fijos';
 import {
   buscarRamo,
@@ -173,6 +175,9 @@ export async function responder(db: SQLiteDatabase, frase: string, contexto: Con
       return { ...r, texto: `${r.texto} (Aprendido: la próxima vez que digas "${contexto.pendiente}", lo haré directo.)` };
     }
   }
+
+  // 0) Si la frase habla de hacerse daño, siempre se responde con ayuda (antes que cualquier otra cosa).
+  if (detectarRiesgo(t)) return { ...(await ejecutar(db, { tipo: 'crisis' }, sistema)), intencion: 'crisis' };
 
   // 2) ¿Ya lo aprendió antes?
   const aprendido = await buscarAprendido(db, frase);
@@ -702,6 +707,7 @@ export async function ejecutar(db: SQLiteDatabase, i: Intencion, sistema: Sistem
         banco: ['En Gastos toca "Del banco" → "Activar gastos automáticos" y activa Tinzit0 en "Acceso a notificaciones". Si Android dice "ajuste restringido": Ajustes → Apps → Tinzit0 → ⋮ → "Permitir ajustes restringidos". Eliges si te pregunto cada compra o las anoto solas.', '/gastos-banco'],
         boleta: ['En Gastos toca "Boleta" (o dime "escanea una boleta"), sácale una foto y te dejo el gasto listo con el total, el local y la fecha.', '/boleta'],
         campus: ['En Estudio toca "Asistencia": estando en la U guardas la ubicación y la activas (Android pide ubicación "todo el tiempo"). Marco "fui" cuando estás en la U a la hora de la clase y, si no, te pregunto.', '/campus'],
+        bienestar: ['En Hoy toca la tarjeta Bienestar. Ahí está "Estoy a mil" para bajar una emoción fuerte en 2 minutos, "Surfear impulso", tu tarjeta diaria, tus patrones y tu plan de crisis. También puedes decirme "estoy a mil" o "me siento un 5". Todo queda solo en tu celular.', '/bienestar'],
         proyeccion: ['En Gastos ves "Hoy puedes gastar" y cómo terminarías el mes a tu ritmo. Necesita un presupuesto semanal (Ajustes → Gastos). También pregúntame "¿cuánto puedo gastar hoy?".', '/gastos'],
         estudio: ['En Hoy toca "Estudio" → "Nuevo ramo". En cada ramo agregas tus evaluaciones con su ponderación y nota (de 1,0 a 7,0) y te digo tu promedio y cuánto necesitas para el 4,0. También puedes decirme "me saqué un 5,5 en la prueba de cálculo" o "tengo prueba de química el viernes" y te armo un plan de estudio.', '/estudio'],
         horario: ['Abre un ramo, toca el lápiz y agrega sus bloques (día y hora). Te aviso 10 minutos antes de cada clase y en Hoy ves la clase de ahora. Pregúntame "qué clase tengo ahora".', '/horario'],
@@ -781,6 +787,41 @@ export async function ejecutar(db: SQLiteDatabase, i: Intencion, sistema: Sistem
           ? `, justo al límite de tu presupuesto (${formatCLP(p.presupuestoMes)}).`
           : `, dentro de tu presupuesto (${formatCLP(p.presupuestoMes)}). Vas bien.`;
       return { texto: base + fin, ruta: '/gastos' };
+    }
+
+    // ---------- Bienestar ----------
+    case 'crisis': {
+      const plan = await obtenerPlan(db);
+      const persona = plan.contactos[0];
+      return {
+        texto:
+          'Siento mucho que estés pasando por algo tan fuerte. No tienes que pasarlo sin compañía. ' +
+          'Llama ahora a la línea de prevención: asterisco 4141, es gratis y atienden las 24 horas. ' +
+          (persona ? `También puedes llamar a ${persona.nombre}. ` : '') +
+          'Si estás en peligro inmediato, llama al 131. Te abro tu plan de crisis.',
+        accion: { tipo: 'navegar', ruta: '/plan-crisis' },
+        ruta: '/plan-crisis',
+      };
+    }
+
+    case 'animo_registrar': {
+      await registrarAnimo(db, i.valor);
+      const extra =
+        i.valor <= 3
+          ? ' Gracias por contármelo. Si quieres, hacemos juntos un ejercicio para bajar la intensidad: di "estoy a mil".'
+          : i.valor >= 8
+            ? ' ¡Qué bueno! Anota qué hiciste hoy, para repetirlo.'
+            : '';
+      return { texto: `Anoté tu ánimo de hoy: ${i.valor} de 10 (${textoAnimo(i.valor).toLowerCase()}).${extra}` };
+    }
+
+    case 'bienestar_ir': {
+      const frases: Record<string, string> = {
+        '/calma': 'Estoy contigo. Vamos a bajar la intensidad paso a paso.',
+        '/impulso': 'Las ganas son como una ola: suben y bajan. Te acompaño mientras pasa.',
+        '/plan-crisis': 'Abriendo tu plan de crisis. La línea *4141 es gratis, 24 horas.',
+      };
+      return { texto: frases[i.ruta] ?? `Abriendo ${i.nombre}.`, accion: { tipo: 'navegar', ruta: i.ruta }, ruta: i.ruta };
     }
 
     case 'finanzas_ir': {

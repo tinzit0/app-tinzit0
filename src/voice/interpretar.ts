@@ -15,6 +15,7 @@ import { endOfWeek, toISODate, weekdayMonFirst } from '@/utils/fechas';
 import { parseMonto } from '@/utils/montos';
 import { reglasApps, type IntencionApps } from './reglasApps';
 import { reglasEstudio, type IntencionEstudio } from './reglasEstudio';
+import { reglasBienestar, type IntencionBienestar } from './reglasBienestar';
 import { reglasFinanzas, type IntencionFinanzas } from './reglasFinanzas';
 import { reglasExtra, type IntencionExtra } from './reglasExtra';
 import { normalizar, sinActivacion } from './texto';
@@ -72,6 +73,7 @@ export type Intencion =
   | IntencionApps
   | IntencionEstudio
   | IntencionFinanzas
+  | IntencionBienestar
   | { tipo: 'desconocido'; texto: string };
 
 export type ColorHud = 'cian' | 'rojo' | 'azul' | 'verde' | 'morado' | 'naranjo' | 'dorado' | 'blanco' | 'rosado' | 'lima' | 'defecto';
@@ -407,6 +409,7 @@ export function interpretar(frase: string, hoy = new Date(), contexto: Contexto 
   }
 
   const porRegla =
+    reglasBienestar(t) ??
     reglasFinanzas(t) ??
     reglasEstudio(t, hoy, detectarFecha) ??
     reglasExtra(t) ??

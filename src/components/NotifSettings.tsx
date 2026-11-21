@@ -23,6 +23,7 @@ const AVISOS: Aviso[] = [
   { key: 'notif_fijos', titulo: 'Pagos fijos', detalle: 'Un día antes de cada gasto fijo' },
   { key: 'notif_clases', titulo: 'Antes de cada clase', detalle: '10 minutos antes, con la sala' },
   { key: 'notif_pruebas', titulo: 'Pruebas', detalle: 'La noche anterior y la mañana de la prueba' },
+  { key: 'notif_tarjeta', horaKey: 'hora_tarjeta', titulo: 'Tarjeta de bienestar', detalle: 'Para anotar cómo estuvo tu día', defecto: '22:00' },
 ];
 
 export function NotifSettings() {

@@ -33,6 +33,7 @@ export const TEMAS_AYUDA: [RegExp, string][] = [
   [/gastos? (del banco|automatic)|avisos del banco|notificaciones del banco|banco/, 'banco'],
   [/boleta|recibo|ticket/, 'boleta'],
   [/asistencia automatica|ubicacion de la u|geocerca/, 'campus'],
+  [/bienestar|salud mental|plan de crisis|estoy a mil|tarjeta diaria|surfear|impulso|calmarme/, 'bienestar'],
   [/cuanto puedo gastar|proyeccion|fin de mes/, 'proyeccion'],
   [/escane|foto (a|de) (mis )?apuntes|pizarra|ocr/, 'escanear'],
   [/grab(ar|o) (la |una )?clase|transcrib/, 'grabar'],

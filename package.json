@@ -61,7 +61,7 @@
     "android": "expo start --android",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
-    "test": "tsx scripts/test-db.ts && tsx scripts/test-voz.ts && tsx scripts/test-estudio.ts && tsx scripts/test-finanzas.ts"
+    "test": "tsx scripts/test-db.ts && tsx scripts/test-voz.ts && tsx scripts/test-estudio.ts && tsx scripts/test-finanzas.ts && tsx scripts/test-bienestar.ts"
   },
   "private": true,
   "react-native-executorch": {

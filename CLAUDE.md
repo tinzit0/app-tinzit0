@@ -44,7 +44,7 @@ src/components/          UI reutilizable (Card, Chip, Button, Field, Fab, Pressa
                          DonutChart, Heatmap, MicOrb, RestTimer, LockGate, LogrosProvider, AppLifecycle…)
 src/database/            acceso a datos por módulo (tareas, gastos, fijos, metas, gym, cuerpo,
                          habitos, logros, notas, apps, respaldo, estadisticas, queries=settings)
-  schema.ts              MIGRACIONES versionadas con PRAGMA user_version (v1…v8)
+  schema.ts              MIGRACIONES versionadas con PRAGMA user_version (v1…v9)
 src/notifications/       mensajes.ts (personalidad) + programar.ts (agenda 7 días)
 src/voice/               texto.ts (normalizar, "ey Tinzit0"), interpretar.ts (NLU local, puro, ~40 intenciones + contexto),
                          ejecutar.ts (acciones + respuestas + historial; devuelve "accion" para la UI),
@@ -80,6 +80,12 @@ modules/tinzit0-avisos/  MÓDULO NATIVO PROPIO (Kotlin, Expo Modules): Notificat
 src/estudio/campusTarea.ts  asistencia automática: geocerca (expo-location + expo-task-manager, ubicación "todo el tiempo").
                          defineTask se importa en index.ts. Visitas en campus_visits; conciliarAsistencia marca "fui".
                          Pregunta "¿Fuiste a X?" con botones (categoría 'asistencia') al terminar cada clase no detectada.
+src/bienestar/            BIENESTAR / salud mental (habilidades DBT). logica.ts (puro: detectarRiesgo, descubrirPatrones,
+                         diaDificil, faseImpulso, resumenParaTerapia), privacidad.ts (huella opcional; calma y plan de crisis
+                         NUNCA se bloquean). database/bienestar.ts: diary_cards, calm_sessions (migración v9), plan en settings.
+                         Pantallas: Bienestar, Calma ("Estoy a mil"), Impulso, TarjetaDiaria, Patrones, PlanCrisis, Habilidades.
+                         SEGURIDAD: frases de hacerse daño → intención 'crisis' ANTES que todo (también antes de lo aprendido)
+                         con *4141 / 131. No quitar. Textos de notificación discretos. Probado en scripts/test-bienestar.ts.
 src/clima/clima.ts       Open-Meteo (sin key), caché 30 min en settings, Concepción por defecto
 src/widget/              datos.ts, ResumenWidget.tsx, lib.ts (carga segura), index.tsx
 src/theme/               tokens.ts, ThemeProvider.tsx (sistema/claro/oscuro)
@@ -117,7 +123,9 @@ recordatorio semanal · Bloqueo con huella · Asistente de voz/texto con "ey Tin
 Ícono y splash · Modo Estudiante (ramos, notas chilenas y "cuánto necesito", horario con aviso antes de clase, asistencia,
 pruebas con plan de estudio en Tareas, Pomodoro con lofi, tarjetas con repetición espaciada, grabar clase → texto/resumen,
 escanear apuntes sin internet, resumen semanal por voz) · Gastos automáticos desde avisos del banco · Boletas escaneadas → gasto ·
-"Hoy puedes gastar" y proyección de fin de mes · Asistencia automática por ubicación de la U.
+"Hoy puedes gastar" y proyección de fin de mes · Asistencia automática por ubicación de la U ·
+Bienestar (Estoy a mil, surfear impulso, tarjeta diaria DBT, patrones de ánimo, plan de crisis con *4141, habilidades,
+resumen para el psicólogo/a).
 
 ## Pendiente / ideas
 

@@ -24,7 +24,9 @@ import { obtenerProyeccion } from '@/database/finanzas';
 import { completadasEnRango, tareasDelDia } from '@/database/tareas';
 import { consejoClima, diaDe, obtenerClima, resumenCorto } from '@/clima/clima';
 import { toISODate, weekdayMonFirst } from '@/utils/fechas';
-import { mensajeClase, mensajePreguntaAsistencia, mensajeDomingo, mensajeGastoFijo, mensajeManana, mensajeNoche, mensajePrueba, MENSAJE_PRUEBA } from './mensajes';
+import { datosBienestar, obtenerTarjeta } from '@/database/bienestar';
+import { diaDificil } from '@/bienestar/logica';
+import { mensajeApoyo, mensajeTarjeta, mensajeClase, mensajePreguntaAsistencia, mensajeDomingo, mensajeGastoFijo, mensajeManana, mensajeNoche, mensajePrueba, MENSAJE_PRUEBA } from './mensajes';
 
 const CANAL = 'tinzit0';
 const DIAS_ADELANTE = 7;
@@ -127,6 +129,12 @@ export function reprogramarTodo(db: SQLiteDatabase): Promise<void> {
       const presSemanal = Number((await getSetting(db, 'presupuesto_semanal')) ?? 0) || 0;
       const gastoSemanaHoy = proy?.porDia != null ? presSemanal - proy.porDia * proy.diasRestantesSemana : 0;
 
+      // Bienestar: recordatorio para la tarjeta y un mensaje de apoyo el día de la semana que más te cuesta.
+      const onTarjeta = await on('notif_tarjeta');
+      const horaTarjeta = leerHora(await getSetting(db, 'hora_tarjeta'), '22:00');
+      const tarjetaHoy = await obtenerTarjeta(db).catch(() => null);
+      const diaApoyo = diaDificil(await datosBienestar(db, 60).catch(() => []));
+
       // Pronóstico de 7 días (del caché o de internet). Si no hay conexión, las notificaciones van sin clima.
       const pronostico = await obtenerClima(db).catch(() => null);
 
@@ -164,6 +172,14 @@ export function reprogramarTodo(db: SQLiteDatabase): Promise<void> {
             pruebasProximas: pruebas.filter((e) => e.date && e.date > iso && e.date <= toISODate(new Date(dia.getFullYear(), dia.getMonth(), dia.getDate() + 7))).length,
           });
           await agendar(d.titulo, d.cuerpo, enFecha(dia, domingo.h, domingo.m), { ruta: '/' });
+        }
+        if (onTarjeta && !(i === 0 && tarjetaHoy?.animo != null)) {
+          const t = mensajeTarjeta();
+          await agendar(t.titulo, t.cuerpo, enFecha(dia, horaTarjeta.h, horaTarjeta.m), { ruta: '/tarjeta-diaria' });
+        }
+        if (diaApoyo != null && dia.getDay() === diaApoyo) {
+          const a = mensajeApoyo({ nombre });
+          await agendar(a.titulo, a.cuerpo, enFecha(dia, 12, 0), { ruta: '/bienestar' });
         }
         // Clases: un aviso unos minutos antes de cada bloque.
         for (const b of bloques.filter((x) => x.weekday === weekdayMonFirst(dia))) {

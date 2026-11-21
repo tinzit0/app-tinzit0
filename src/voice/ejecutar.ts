@@ -24,7 +24,10 @@ import {
   totalPorCategoria,
   ultimoGasto,
 } from '@/database/gastos';
-import { agregarSerie, listarEjercicios, obtenerOCrearEjercicio, rutinaDeHoy, seriesDeFecha, ultimaSerie } from '@/database/gym';
+import { compararMes } from '@/database/estadisticas';
+import { diaDePagoEn, listarFijos } from '@/database/fijos';
+import { agregarSerie, guardarDiaRutina, listarEjercicios, obtenerOCrearEjercicio, obtenerRutina, rutinaDeHoy, seriesDeFecha, ultimaSerie } from '@/database/gym';
+import { desbloqueados, LOGROS } from '@/database/logros';
 import { alternarHabito, crearHabito, listarHabitos, SUGERENCIAS } from '@/database/habitos';
 import { abonar, buscarMeta, crearMeta, listarMetas } from '@/database/metas';
 import { guardarNota, listarNotas } from '@/database/notas';
@@ -44,13 +47,15 @@ import { fechaLarga, fromISODate, startOfWeek, toISODate } from '@/utils/fechas'
 import { formatCLP } from '@/utils/moneda';
 import type { CambioHud, Panel } from '@/jarvis/paneles';
 import { panelPara } from '@/jarvis/panelesDatos';
+import { aprender, buscarAprendido, olvidar, sugerir, type Sugerencia } from './aprender';
 import { EJEMPLOS, interpretar, type Contexto, type Intencion } from './interpretar';
-import { normalizar, parecido } from './texto';
+import { normalizar, parecido, sinActivacion } from './texto';
 
 export type Accion =
   | { tipo: 'navegar'; ruta: string }
   | { tipo: 'abrir_app'; pkg: string; nombre: string }
-  | { tipo: 'recordatorio'; texto: string; segundos: number };
+  | { tipo: 'recordatorio'; texto: string; segundos: number }
+  | { tipo: 'tema'; tema: 'claro' | 'oscuro' | 'sistema' };
 
 export type Respuesta = {
   texto: string;
@@ -63,6 +68,9 @@ export type Respuesta = {
   hud?: CambioHud;
   /** true = terminar el modo conversación. */
   fin?: boolean;
+  /** Opciones de "¿Quisiste decir…?" (y la frase original, para aprenderla). */
+  sugerencias?: Sugerencia[];
+  pendiente?: string;
 };
 
 /** Datos del celular que el ejecutor no puede leer solo (los pasa la pantalla). */
@@ -112,7 +120,62 @@ const PANTALLAS: [RegExp, string][] = [
 ];
 
 export async function responder(db: SQLiteDatabase, frase: string, contexto: Contexto = {}, sistema: Sistema = {}): Promise<Respuesta> {
-  const i = interpretar(frase, new Date(), contexto);
+  const t = normalizar(sinActivacion(frase));
+
+  // 1) ¿Está respondiendo a un "¿Quisiste decir…?" ("la primera", "sí", "la segunda")?
+  if (contexto.sugerencias?.length && contexto.pendiente) {
+    const idx = /^(si|sip|esa|eso|la primera|primera|el primero|uno|1|correcto|exacto)$/.test(t)
+      ? 0
+      : /^(la segunda|segunda|el segundo|dos|2)$/.test(t)
+        ? 1
+        : /^(la tercera|tercera|el tercero|tres|3)$/.test(t)
+          ? 2
+          : /^(no|ninguna|ninguno|nada|olvidalo|cancela)$/.test(t)
+            ? -1
+            : null;
+    if (idx === -1) return { texto: 'Entendido. Dime de otra forma lo que necesitas.', intencion: 'desconocido' };
+    const s = idx !== null ? contexto.sugerencias[idx] : null;
+    if (s) {
+      await aprender(db, contexto.pendiente, s.comando);
+      const r = await responder(db, s.comando, {}, sistema);
+      return { ...r, texto: `${r.texto} (Aprendido: la próxima vez que digas "${contexto.pendiente}", lo haré directo.)` };
+    }
+  }
+
+  // 2) ¿Ya lo aprendió antes?
+  const aprendido = await buscarAprendido(db, frase);
+  const i0 = interpretar(aprendido ?? frase, new Date(), contexto);
+
+  // 3) Enseñar / olvidar
+  if (i0.tipo === 'ensenar') {
+    const destino = interpretar(i0.comando);
+    const sug = destino.tipo === 'desconocido' ? sugerir(i0.comando, 1)[0] : null;
+    const comando = destino.tipo !== 'desconocido' ? i0.comando : sug && sug.puntaje >= 0.45 ? sug.comando : null;
+    if (!comando) return { texto: `No sé hacer "${i0.comando}" todavía, así que no puedo asociarlo. Prueba con algo que ya entienda, como "mis tareas de hoy".`, intencion: 'ensenar' };
+    await aprender(db, i0.frase, comando);
+    return { texto: `Aprendido. Cuando digas "${i0.frase}", haré: ${comando}.`, intencion: 'ensenar' };
+  }
+  if (i0.tipo === 'olvidar') {
+    const ok = await olvidar(db, i0.frase);
+    return { texto: ok ? `Olvidé "${i0.frase}".` : `No tenía nada aprendido para "${i0.frase}".`, intencion: 'olvidar' };
+  }
+
+  // 4) Si no entendió: buscar por parecido
+  let i: Intencion = i0;
+  if (i.tipo === 'desconocido') {
+    const sugs = sugerir(frase, 3);
+    if (sugs[0] && sugs[0].puntaje >= 0.6) {
+      i = interpretar(sugs[0].comando, new Date(), contexto);
+    } else if (sugs.length) {
+      return {
+        texto: `No estoy seguro de haberte entendido. ¿Quisiste decir: ${sugs.map((s, k) => `${k + 1}) ${s.etiqueta.toLowerCase()}`).join(', ')}? Toca una opción o dime "la primera".`,
+        intencion: 'desconocido',
+        sugerencias: sugs,
+        pendiente: frase.trim(),
+      };
+    }
+  }
+
   const r = await ejecutar(db, i, sistema);
   // El panel se arma DESPUÉS de ejecutar, así muestra los datos ya actualizados.
   const panel = await panelPara(db, i, sistema).catch(() => undefined);
@@ -159,7 +222,7 @@ export async function ejecutar(db: SQLiteDatabase, i: Intencion, sistema: Sistem
 
     case 'ayuda':
       return {
-        texto: `Puedo con tus tareas, gastos, metas, gym, peso, hábitos, notas, el clima y recordatorios. Prueba con:\n• ${EJEMPLOS.join('\n• ')}`,
+        texto: `Puedo con tus tareas, gastos, gastos fijos, metas, gym, peso, hábitos, notas, medallas, estadísticas, el clima, recordatorios y temporizadores. También respondo "¿cómo hago…?" sobre la app. Si no te entiendo, te doy opciones y aprendo la que elijas; o enséñame: "cuando diga ya llegué, muéstrame mis tareas". Prueba con:\n• ${EJEMPLOS.join('\n• ')}`,
       };
 
     case 'motivacion': {
@@ -492,6 +555,134 @@ export async function ejecutar(db: SQLiteDatabase, i: Intencion, sistema: Sistem
       if (app) return { texto: `Abriendo ${app.label}…`, accion: { tipo: 'abrir_app', pkg: app.pkg, nombre: app.label } };
       return { texto: `No sé abrir "${i.destino}" todavía. Puedo abrir pantallas de Tinzit0 (tareas, gastos, gym…) o tus apps (WhatsApp, Spotify…).` };
     }
+
+    case 'fijos': {
+      const fijos = (await listarFijos(db)).filter((f) => f.active);
+      if (!fijos.length) return { texto: 'No tienes gastos fijos registrados. Puedes agregarlos en Gastos → Fijos.', ruta: '/fijos' };
+      if (i.que === 'total') {
+        const total = fijos.reduce((s, f) => s + f.amount, 0);
+        return { texto: `Pagas ${formatCLP(total)} al mes en ${fijos.length} gastos fijos: ${lista(fijos.slice(0, 4).map((f) => f.name))}.`, ruta: '/fijos' };
+      }
+      const ahora = new Date();
+      const proximos = fijos
+        .map((f) => {
+          let d = diaDePagoEn(f, ahora.getFullYear(), ahora.getMonth());
+          let fecha = new Date(ahora.getFullYear(), ahora.getMonth(), d);
+          if (d < ahora.getDate()) {
+            d = diaDePagoEn(f, ahora.getFullYear(), ahora.getMonth() + 1);
+            fecha = new Date(ahora.getFullYear(), ahora.getMonth() + 1, d);
+          }
+          return { f, fecha };
+        })
+        .sort((a, b) => a.fecha.getTime() - b.fecha.getTime())
+        .slice(0, 3);
+      return {
+        texto: `Próximos pagos: ${lista(proximos.map((p) => `${p.f.name} (${formatCLP(p.f.amount)}) ${nombreDia(toISODate(p.fecha))}`))}.`,
+        ruta: '/fijos',
+      };
+    }
+
+    case 'estadisticas_mes': {
+      const ahora = new Date();
+      const { actual: a, anterior: b } = await compararMes(db, ahora.getFullYear(), ahora.getMonth());
+      const dif = a.gastoTotal - b.gastoTotal;
+      const top = a.porCategoria[0];
+      return {
+        texto:
+          `Este mes: ${a.tareasHechas} tareas hechas, ${a.diasGym.length} ${a.diasGym.length === 1 ? 'día' : 'días'} de gym y ${formatCLP(a.gastoTotal)} gastados` +
+          `${b.gastoTotal ? ` (${dif > 0 ? `${formatCLP(dif)} más` : `${formatCLP(-dif)} menos`} que el mes pasado)` : ''}.` +
+          `${top ? ` Donde más gastaste: ${categoria(top.category).label.toLowerCase()}.` : ''}`,
+        ruta: '/estadisticas',
+      };
+    }
+
+    case 'logros': {
+      const ganados = await desbloqueados(db);
+      const ultimo = [...ganados.entries()].sort((x, y) => y[1].localeCompare(x[1]))[0];
+      const l = ultimo ? LOGROS.find((x) => x.key === ultimo[0]) : null;
+      return {
+        texto: ganados.size
+          ? `Tienes ${ganados.size} de ${LOGROS.length} medallas.${l ? ` La última: "${l.titulo}".` : ''}`
+          : `Aún no tienes medallas. La más fácil: completa tu primera tarea.`,
+        ruta: '/logros',
+      };
+    }
+
+    case 'record_ejercicio': {
+      const ejercicios = (await listarEjercicios(db)).filter((e) => e.maxPeso);
+      if (!ejercicios.length) return { texto: 'Aún no tienes ejercicios registrados en el gym.', ruta: '/gym' };
+      const ej = i.texto ? ejercicios.map((e) => ({ e, p: parecido(i.texto, e.name) })).filter((x) => x.p >= 0.4).sort((a, b) => b.p - a.p)[0]?.e : null;
+      if (ej) return { texto: `Tu récord en ${ej.name} es ${ej.maxPeso} kg.`, ruta: '/gym' };
+      const top = [...ejercicios].sort((a, b) => (b.maxPeso ?? 0) - (a.maxPeso ?? 0)).slice(0, 3);
+      return { texto: `Tus récords: ${lista(top.map((e) => `${e.name} ${e.maxPeso} kg`))}.`, ruta: '/gym' };
+    }
+
+    case 'rutina_dia': {
+      const r = (await obtenerRutina(db)).find((x) => x.weekday === i.dia);
+      const nombreD = ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'][i.dia];
+      return { texto: r ? `El ${nombreD} toca ${r.label.toLowerCase()}.` : `El ${nombreD} es día de descanso.`, ruta: '/gym' };
+    }
+
+    case 'cambiar_rutina': {
+      await guardarDiaRutina(db, i.dia, i.label ? mayus(i.label) : null);
+      const nombreD = ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'][i.dia];
+      return { texto: i.label ? `Listo, el ${nombreD} ahora toca ${i.label}.` : `Listo, el ${nombreD} queda de descanso.`, ruta: '/gym' };
+    }
+
+    case 'buscar_notas': {
+      const notas = await listarNotas(db, i.texto);
+      if (!notas.length) return { texto: `No encontré notas sobre "${i.texto}".`, ruta: '/notas' };
+      return { texto: `Encontré ${notas.length === 1 ? '1 nota' : `${notas.length} notas`}: ${lista(notas.slice(0, 3).map((n) => `"${n.body.split('\n')[0]}"`))}.`, ruta: '/notas' };
+    }
+
+    case 'habitos_pendientes': {
+      const h = await listarHabitos(db);
+      if (!h.length) return { texto: 'No tienes hábitos todavía. Dime "crea un hábito de tomar agua".', ruta: '/habitos' };
+      const pend = h.filter((x) => !x.hechoHoy);
+      if (!pend.length) return { texto: `Marcaste todos tus hábitos de hoy. Excelente constancia.`, ruta: '/habitos' };
+      return { texto: `Te ${pend.length === 1 ? 'falta 1 hábito' : `faltan ${pend.length} hábitos`}: ${lista(pend.map((x) => x.name))}.`, ruta: '/habitos' };
+    }
+
+    case 'ayuda_app': {
+      const AYUDA: Record<string, [string, string]> = {
+        respaldo: ['En Ajustes → Respaldo toca "Exportar respaldo" y guárdalo en Drive o mándatelo por correo. En un celular nuevo, usa "Importar respaldo". Te recuerdo hacerlo cada semana.', '/ajustes'],
+        bloqueo: ['En Ajustes → Seguridad activa "Bloqueo con huella". Te la pide al abrir la app y al volver después de un minuto.', '/ajustes'],
+        widget: ['Mantén presionado el fondo de tu pantalla de inicio, toca Widgets y busca "Tinzit0 · Hoy". Muestra tus tareas y el gasto de la semana.', '/'],
+        notificaciones: ['En Ajustes → Notificaciones eliges la hora del resumen de la mañana, del recordatorio de la noche y del resumen del domingo. Ahí también puedes enviar una de prueba.', '/ajustes'],
+        fijos: ['En Gastos toca "Fijos" y luego el +. Pones el monto y el día de pago: se suma solo cada mes y te aviso un día antes.', '/fijos'],
+        metas: ['Dime "quiero ahorrar 300 lucas para un viaje" o ve a Gastos → Metas. Después me dices "abona 10 lucas" y le sumo.', '/metas'],
+        habitos: ['Dime "crea un hábito de leer" o ve a Hoy → Hábitos. Lo marcas cada día y armas tu racha.', '/habitos'],
+        gym: ['En Gym → "Registrar entrenamiento" anotas series, o dime "hice 3 series de 10 de press banca con 40 kilos". La rutina se cambia en "Editar rutina" o diciendo "el lunes toca pecho".', '/gym'],
+        cuerpo: ['En Gym → "Peso y medidas", o dime "anota mi peso 78 kilos". Ahí ves el gráfico de tu evolución.', '/cuerpo'],
+        presupuesto: ['Dime "cambia mi presupuesto a 100 lucas" o ve a Ajustes → Gastos. Te aviso al 80% y al 100%.', '/ajustes'],
+        gastos: ['Dime "anota un gasto de 5 lucas en comida" o toca el + en Gastos. Ahí ves la semana, el mes y por categoría.', '/gastos'],
+        tareas: ['Dime "agrega una tarea: comprar pan mañana" o toca el + en Tareas. Puedes hacer que se repita todos los días o ciertos días.', '/tareas'],
+        notas: ['Dime "anota una nota: …" o toca el + en Notas. Se guardan solas y puedes fijarlas arriba.', '/notas'],
+        tema: ['Dime "modo oscuro" o "modo claro", o cámbialo en Ajustes → Apariencia. Para mi color, dime "ponte rojo" o "ponte morado".', '/ajustes'],
+        asistente: ['Toca el micrófono en Hoy y háblame. En Ajustes → Asistente eliges mi voz, cómo te llamo, y puedes activar que te escuche cuando digas "Tinzit0" con la app abierta. Si no te entiendo, elige una opción y lo aprendo.', '/ajustes'],
+        apps: ['En Hoy, "Tus apps" → Editar, eliges hasta 8 apps para abrirlas de un toque. También puedes decirme "abre WhatsApp".', '/apps'],
+        clima: ['El clima aparece en Hoy. Para cambiar la ciudad ve a Ajustes → Clima, o usa tu ubicación.', '/clima'],
+        estadisticas: ['En Hoy toca "Tu mes en números", o dime "cómo me fue este mes".', '/estadisticas'],
+        logros: ['Las medallas se ganan solas al cumplir metas: tareas, días de gym, rachas, ahorro. Míralas con el trofeo en Hoy.', '/logros'],
+      };
+      const [texto, ruta] = AYUDA[i.tema] ?? ['Puedo ayudarte con tareas, gastos, gym, hábitos, notas, metas y clima. Pregúntame "cómo hago…" cualquier cosa.', '/'];
+      return { texto, ruta };
+    }
+
+    case 'cambiar_tema': {
+      const nombres = { claro: 'claro', oscuro: 'oscuro', sistema: 'automático' } as const;
+      return { texto: `Cambiando al modo ${nombres[i.tema]}.`, accion: { tipo: 'tema', tema: i.tema } };
+    }
+
+    case 'temporizador': {
+      const txt = i.segundos >= 60 && i.segundos % 60 === 0 ? `${i.segundos / 60} ${i.segundos === 60 ? 'minuto' : 'minutos'}` : `${i.segundos} segundos`;
+      return { texto: `Temporizador de ${txt} en marcha. Te aviso al terminar.`, accion: { tipo: 'recordatorio', texto: 'Tiempo cumplido', segundos: i.segundos } };
+    }
+
+    case 'ensenar':
+    case 'olvidar':
+      // Se resuelven en responder() (necesitan revisar lo aprendido).
+      return { texto: 'Listo.' };
 
     case 'tema_hud': {
       const nombres: Record<string, string> = {

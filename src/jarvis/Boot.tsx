@@ -17,6 +17,7 @@ const LINEAS = [
   'CARGANDO MÓDULOS: TAREAS · GASTOS · GYM · HÁBITOS',
   'SINCRONIZANDO CLIMA…',
   'CALIBRANDO RECONOCIMIENTO DE VOZ…',
+  'CARGANDO LO APRENDIDO…',
   'TODOS LOS SISTEMAS EN LÍNEA',
 ];
 
@@ -53,8 +54,8 @@ export function Boot({ color, onFin }: { color: string; onFin: () => void }) {
     <Animated.View exiting={FadeOut.duration(260)} style={[StyleSheet.absoluteFill, styles.fondo]}>
       <Pressable style={StyleSheet.absoluteFill} onPress={onFin} accessibilityLabel="Saltar animación de inicio" />
       <View style={styles.centro} pointerEvents="none">
-        <AppText style={[styles.titulo, { color }]}>J · A · R · V · I · S</AppText>
-        <AppText style={styles.sub}>TINZIT0 OS</AppText>
+        <AppText style={[styles.titulo, { color }]}>T · I · N · Z · I · T · 0</AppText>
+        <AppText style={styles.sub}>ASISTENTE PERSONAL</AppText>
         <View style={[styles.track, { borderColor: `${color}55` }]}>
           <Animated.View style={[styles.fill, { backgroundColor: color }, barraStyle]} />
         </View>

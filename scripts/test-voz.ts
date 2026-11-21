@@ -180,3 +180,91 @@ import { aplicarEstilo } from '../src/jarvis/persona';
   console.log(okP ? '✅ Personalidad Jarvis' : `❌ Personalidad: ${JSON.stringify([r1.texto, r2.texto, r3.texto, r4.texto])}`);
   if (!okP) process.exit(1);
 }
+
+// ---------- Entender TODA la app, por parecido y aprendiendo ----------
+(async () => {
+  const { interpretar: interp } = await import('../src/voice/interpretar');
+  const { responder: resp } = await import('../src/voice/ejecutar');
+  const { crearDbPrueba: crear } = await import('./db-prueba');
+  let bien = 0;
+  const fallos: string[] = [];
+  const chequear = (cond: boolean, msg: string) => (cond ? bien++ : fallos.push(msg));
+
+  // Intenciones nuevas
+  const casosExtra: [string, string, Record<string, unknown>?][] = [
+    ['cuánto pago en gastos fijos', 'fijos', { que: 'total' }],
+    ['qué cuentas me tocan pagar', 'fijos', { que: 'proximos' }],
+    ['cómo me fue este mes', 'estadisticas_mes'],
+    ['cuántas medallas tengo', 'logros'],
+    ['cuál es mi récord en press banca', 'record_ejercicio', { texto: 'press banca' }],
+    ['qué me toca el jueves', 'rutina_dia', { dia: 4 }],
+    ['el lunes toca pecho y tríceps', 'cambiar_rutina', { dia: 1, label: 'pecho y triceps' }],
+    ['el domingo toca descanso', 'cambiar_rutina', { dia: 7, label: null }],
+    ['tengo alguna nota sobre el gas', 'buscar_notas', { texto: 'el gas' }],
+    ['qué hábitos me faltan', 'habitos_pendientes'],
+    ['cómo hago un respaldo', 'ayuda_app', { tema: 'respaldo' }],
+    ['cómo activo la huella', 'ayuda_app', { tema: 'bloqueo' }],
+    ['dónde veo las estadísticas', 'ayuda_app', { tema: 'estadisticas' }],
+    ['cómo agrego un gasto fijo', 'ayuda_app', { tema: 'fijos' }],
+    ['para qué sirve el widget', 'ayuda_app', { tema: 'widget' }],
+    ['modo oscuro', 'cambiar_tema', { tema: 'oscuro' }],
+    ['pon un temporizador de 90 segundos', 'temporizador', { segundos: 90 }],
+    ['descanso de dos minutos', 'temporizador', { segundos: 120 }],
+    ['cuando diga ya llegué muéstrame mis tareas', 'ensenar', { frase: 'ya llegue' }],
+    ['olvida ya llegué', 'olvidar', { frase: 'ya llegue' }],
+  ];
+  for (const [f, tipo, campos] of casosExtra) {
+    const r = interp(f) as Record<string, unknown>;
+    chequear(r.tipo === tipo && Object.entries(campos ?? {}).every(([k, v]) => r[k] === v), `${f} → ${JSON.stringify(r)}`);
+  }
+
+  const db = await crear();
+  // Por parecido (frases que NO están en las reglas)
+  const porParecido: [string, string][] = [
+    ['cuánta plata llevo', 'gasto_periodo'],
+    ['me alcanza la plata', 'presupuesto'],
+    ['salgo con chaqueta', 'clima'],
+    ['qué entreno hoy', 'gym_hoy'],
+    ['no tengo ganas de nada', 'motivacion'],
+    ['ponme al tanto', 'resumen'],
+    ['qué anoté', 'leer_notas'],
+  ];
+  for (const [f, tipo] of porParecido) {
+    const r = await resp(db, f);
+    chequear(r.intencion === tipo, `parecido "${f}" → ${r.intencion}: ${r.texto.slice(0, 60)}`);
+  }
+
+  // Aprender desde "¿Quisiste decir…?"
+  const dudosa = await resp(db, 'oye cómo andan las lucas del mes');
+  chequear(!!dudosa.sugerencias?.length || dudosa.intencion === 'gasto_periodo', `sugerencias: ${dudosa.texto}`);
+  if (dudosa.sugerencias?.length) {
+    const elegida = await resp(db, 'la primera', { sugerencias: dudosa.sugerencias, pendiente: dudosa.pendiente });
+    chequear(elegida.texto.includes('Aprendido'), `aprender por elección: ${elegida.texto}`);
+    const otraVez = await resp(db, 'oye cómo andan las lucas del mes');
+    chequear(!otraVez.sugerencias && otraVez.intencion === interp(dudosa.sugerencias[0].comando).tipo, `recordar: ${otraVez.intencion}`);
+  }
+
+  // Enseñar explícitamente
+  const ens = await resp(db, 'cuando diga ya llegué muéstrame mis tareas de hoy');
+  chequear(ens.texto.startsWith('Aprendido'), `enseñar: ${ens.texto}`);
+  const usa = await resp(db, 'ya llegué');
+  chequear(usa.intencion === 'tareas_hoy', `usar aprendido: ${usa.intencion}`);
+  const olv = await resp(db, 'olvida ya llegué');
+  chequear(olv.texto.startsWith('Olvidé'), `olvidar: ${olv.texto}`);
+
+  // Respuestas de las funciones nuevas
+  for (const f of ['cuánto pago en gastos fijos', 'cómo me fue este mes', 'cuántas medallas tengo', 'qué me toca el jueves', 'cómo hago un respaldo', 'qué hábitos me faltan']) {
+    const r = await resp(db, f);
+    chequear(r.texto.length > 10 && r.intencion !== 'desconocido', `respuesta "${f}": ${r.texto}`);
+  }
+  const tema = await resp(db, 'modo oscuro');
+  chequear(tema.accion?.tipo === 'tema', 'acción tema');
+  const rut = await resp(db, 'el viernes toca piernas');
+  const rut2 = await resp(db, 'qué me toca el viernes');
+  chequear(rut2.texto.includes('piernas'), `rutina: ${rut.texto} / ${rut2.texto}`);
+
+  fallos.forEach((f) => console.error('❌', f));
+  const total = bien + fallos.length;
+  console.log(fallos.length ? `⚠️ Funciones extra: ${bien}/${total}` : `✅ Funciones extra, parecido y aprendizaje: ${bien}/${total}`);
+  if (fallos.length) process.exitCode = 1;
+})();

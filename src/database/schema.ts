@@ -186,6 +186,15 @@ const MIGRATIONS: string[] = [
   );
   INSERT OR IGNORE INTO settings (key, value) VALUES ('escucha_activa', '0'), ('voz_respuesta', '1');
   `,
+
+  // v6 — Lo que el asistente aprende: tu frase → el comando que significa.
+  `
+  CREATE TABLE IF NOT EXISTS voice_learned (
+    frase   TEXT PRIMARY KEY NOT NULL,   -- normalizada (minúsculas, sin tildes)
+    comando TEXT NOT NULL,               -- frase que el intérprete entiende
+    usos    INTEGER NOT NULL DEFAULT 0
+  );
+  `,
 ];
 
 /** Se llama una vez al abrir la app (desde SQLiteProvider en el _layout raíz). */

@@ -1,5 +1,6 @@
 /**
- * Asistente estilo Jarvis: interfaz holográfica a pantalla completa.
+ * Tinzit0, tu asistente estilo Jarvis: interfaz holográfica a pantalla completa.
+ * Si no entiende algo, te ofrece opciones y APRENDE la que elijas.
  *
  * - Toca el reactor (o di "Jarvis" / "ey Tinzit0" si lo activaste) y habla.
  * - El reactor muestra el estado: en espera, escuchando, procesando, respondiendo.
@@ -41,7 +42,9 @@ import { PanelHud } from '@/jarvis/PanelHud';
 import type { Panel } from '@/jarvis/paneles';
 import { aplicarEstilo, type Estilo } from '@/jarvis/persona';
 import { Reactor, type EstadoReactor } from '@/jarvis/Reactor';
+import { useTheme } from '@/theme/ThemeProvider';
 import { fonts } from '@/theme/tokens';
+import type { Sugerencia } from '@/voice/aprender';
 import { ejecutarAccion } from '@/voice/acciones';
 import { guardarMensaje, mensajesDeHoy, responder, type MensajeChat } from '@/voice/ejecutar';
 import { callar, configurarVoz, hablar } from '@/voice/hablar';
@@ -49,7 +52,7 @@ import type { TipoIntencion } from '@/voice/interpretar';
 import { escuchar, pedirPermisoMicrofono, vozDisponible, type Escucha } from '@/voice/reconocedor';
 import { useVoz } from '@/voice/VozProvider';
 
-const SUGERENCIAS = ['¿Cómo voy hoy?', '¿Va a llover mañana?', 'Estado del sistema', 'Ponte morado', '¿Qué tareas me faltan?'];
+const SUGERENCIAS = ['¿Cómo voy hoy?', '¿Va a llover mañana?', '¿Cómo me fue este mes?', 'Estado del sistema', '¿Qué puedes hacer?'];
 
 const ETIQUETA: Record<EstadoReactor, string> = {
   reposo: 'EN ESPERA',
@@ -71,6 +74,7 @@ export function AsistenteScreen() {
   const { revisar } = useLogros();
   const { pausarActivacion } = useVoz();
   const params = useLocalSearchParams<{ auto?: string; comando?: string }>();
+  const { setPreference } = useTheme();
   const vieneDeVoz = params.auto === '1' || !!params.comando;
 
   // Preferencias
@@ -87,6 +91,8 @@ export function AsistenteScreen() {
   const [ultimaPregunta, setUltimaPregunta] = useState('');
   const [respuesta, setRespuesta] = useState('');
   const [panel, setPanel] = useState<Panel | undefined>();
+  const [sugerencias, setSugerencias] = useState<Sugerencia[]>([]);
+  const duda = useRef<{ sugerencias: Sugerencia[]; pendiente: string } | null>(null);
   const [efecto, setEfecto] = useState<{ tipo: 'scan' | 'pulse'; id: number } | null>(null);
   const [teclado, setTeclado] = useState(!vozDisponible);
   const [texto, setTexto] = useState('');
@@ -188,7 +194,14 @@ export function AsistenteScreen() {
       setEstado('pensando');
       await guardarMensaje(db, 'user', limpio);
 
-      const base = await responder(db, limpio, { ultimo: ultimo.current }, { bateria: bateria.current });
+      const base = await responder(
+        db,
+        limpio,
+        { ultimo: ultimo.current, sugerencias: duda.current?.sugerencias, pendiente: duda.current?.pendiente },
+        { bateria: bateria.current },
+      );
+      // Si no entendió, guardamos las opciones para la próxima frase ("la primera").
+      duda.current = base.sugerencias?.length && base.pendiente ? { sugerencias: base.sugerencias, pendiente: base.pendiente } : null;
       const r = aplicarEstilo(base, prefs.current.estilo, prefs.current.trato);
       ultimo.current = r.intencion ?? null;
 
@@ -196,6 +209,7 @@ export function AsistenteScreen() {
       if (!montado.current) return;
       setRespuesta(r.texto);
       setPanel(r.panel);
+      setSugerencias(r.sugerencias ?? []);
       setHistorial(await mensajesDeHoy(db));
 
       // Cambios de la interfaz pedidos por voz
@@ -205,7 +219,7 @@ export function AsistenteScreen() {
         setEfecto({ tipo: 'pulse', id: Date.now() });
       }
       if (r.hud?.efecto) setEfecto({ tipo: r.hud.efecto, id: Date.now() });
-      if (r.accion) ejecutarAccion(r.accion, router).catch(console.warn);
+      if (r.accion) ejecutarAccion(r.accion, router, { setTema: setPreference }).catch(console.warn);
       revisar(true);
 
       // Hablar y, en modo conversación, volver a escuchar
@@ -216,9 +230,10 @@ export function AsistenteScreen() {
       if (!montado.current) return;
       const seguir = prefs.current.conversacion && !r.fin && !r.accion && vozDisponible && r.intencion !== 'gracias';
       setEstado('reposo');
-      if (seguir) empezar().catch(console.warn);
+      // Pausa breve: así el micrófono no capta el final de su propia voz.
+      if (seguir) setTimeout(() => montado.current && empezar().catch(console.warn), 450);
     },
-    [db, empezar, revisar, router],
+    [db, empezar, revisar, router, setPreference],
   );
   const procesarRef = useRef(procesar);
   useEffect(() => {
@@ -297,8 +312,8 @@ export function AsistenteScreen() {
           <Ionicons name="chevron-back" size={24} color={HUD.texto} />
         </Pressable>
         <View style={{ flex: 1, marginLeft: 8 }}>
-          <AppText style={[styles.marca, { color }]}>{estilo === 'jarvis' ? 'J.A.R.V.I.S' : 'TINZIT0'}</AppText>
-          <AppText style={styles.sub}>TINZIT0 OS · EN LÍNEA</AppText>
+          <AppText style={[styles.marca, { color }]}>TINZIT0</AppText>
+          <AppText style={styles.sub}>{estilo === 'jarvis' ? 'ASISTENTE PERSONAL · EN LÍNEA' : 'EN LÍNEA'}</AppText>
         </View>
         <View style={styles.sys}>
           <AppText style={styles.sysTxt}>{estadoSys.hora}</AppText>
@@ -333,6 +348,23 @@ export function AsistenteScreen() {
               </Animated.View>
             ) : null}
           </View>
+
+          {/* ¿Quisiste decir…? → tocar una opción enseña a Tinzit0 */}
+          {sugerencias.length && estado !== 'escuchando' ? (
+            <View style={styles.sugerencias}>
+              {sugerencias.map((s, k) => (
+                <Pressable
+                  key={s.comando}
+                  onPress={() => procesar(['la primera', 'la segunda', 'la tercera'][k])}
+                  style={[styles.chip, { borderColor: color, backgroundColor: `${color}14` }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Quise decir: ${s.etiqueta}`}
+                >
+                  <AppText style={styles.chipTxt}>{`${k + 1}. ${s.etiqueta}`}</AppText>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
 
           {/* Panel con datos */}
           {panel && estado !== 'escuchando' ? (
@@ -401,7 +433,7 @@ export function AsistenteScreen() {
             {historial.length === 0 ? <AppText style={styles.pregunta}>Sin registros todavía.</AppText> : null}
             {historial.map((m) => (
               <View key={m.id} style={[styles.msg, m.role === 'user' ? styles.msgUser : { borderColor: `${color}40` }]}>
-                <AppText style={[styles.msgRol, { color: m.role === 'user' ? HUD.muyTenue : color }]}>{m.role === 'user' ? 'TÚ' : 'JARVIS'} · {m.created_at.slice(11, 16)}</AppText>
+                <AppText style={[styles.msgRol, { color: m.role === 'user' ? HUD.muyTenue : color }]}>{m.role === 'user' ? 'TÚ' : 'TINZIT0'} · {m.created_at.slice(11, 16)}</AppText>
                 <AppText style={styles.msgTxt}>{m.text}</AppText>
               </View>
             ))}

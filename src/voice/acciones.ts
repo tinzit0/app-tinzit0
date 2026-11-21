@@ -9,7 +9,11 @@ import { abrirApp } from '@/database/apps';
 import { prepararNotificaciones } from '@/notifications/programar';
 import type { Accion } from './ejecutar';
 
-export async function ejecutarAccion(a: Accion, router: ReturnType<typeof useRouter>) {
+export async function ejecutarAccion(
+  a: Accion,
+  router: ReturnType<typeof useRouter>,
+  extra: { setTema?: (t: 'light' | 'dark' | 'system') => void } = {},
+) {
   switch (a.tipo) {
     case 'navegar':
       // Pequeña pausa para que alcances a leer la respuesta.
@@ -19,6 +23,9 @@ export async function ejecutarAccion(a: Accion, router: ReturnType<typeof useRou
       setTimeout(() => {
         abrirApp(a.pkg).catch(() => {});
       }, 700);
+      return;
+    case 'tema':
+      extra.setTema?.(a.tema === 'claro' ? 'light' : a.tema === 'oscuro' ? 'dark' : 'system');
       return;
     case 'recordatorio':
       if (!(await prepararNotificaciones(true))) return;

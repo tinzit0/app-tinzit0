@@ -69,9 +69,9 @@ function propias(tipo: TipoIntencion | undefined, trato: string): string | null 
   switch (tipo) {
     case 'saludo':
       return azar([
-        `${saludoHora()}, ${trato}. Todos los sistemas en línea. ¿En qué te ayudo?`,
-        `A tu servicio, ${trato}.`,
-        `${saludoHora()}, ${trato}. Aquí estoy.`,
+        `${saludoHora()}, ${trato}. Tinzit0 en línea. ¿En qué te ayudo?`,
+        `Tinzit0 a tu servicio, ${trato}.`,
+        `${saludoHora()}, ${trato}. Aquí Tinzit0, todos los sistemas operativos.`,
       ]);
     case 'gracias':
       return azar([`Un placer, ${trato}.`, 'Para eso estoy.', `Siempre a tu disposición, ${trato}.`]);

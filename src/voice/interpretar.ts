@@ -13,6 +13,7 @@
  */
 import { endOfWeek, toISODate, weekdayMonFirst } from '@/utils/fechas';
 import { parseMonto } from '@/utils/montos';
+import { reglasExtra, type IntencionExtra } from './reglasExtra';
 import { normalizar, sinActivacion } from './texto';
 
 export type Prioridad = 'alta' | 'media' | 'baja';
@@ -64,6 +65,7 @@ export type Intencion =
   | { tipo: 'efecto_hud'; efecto: 'scan' | 'pulse' }
   | { tipo: 'estado_sistema' }
   | { tipo: 'fin_conversacion' }
+  | IntencionExtra
   | { tipo: 'desconocido'; texto: string };
 
 export type ColorHud = 'cian' | 'rojo' | 'azul' | 'verde' | 'morado' | 'naranjo' | 'dorado' | 'blanco' | 'rosado' | 'lima' | 'defecto';
@@ -71,7 +73,12 @@ export type ColorHud = 'cian' | 'rojo' | 'azul' | 'verde' | 'morado' | 'naranjo'
 export type TipoIntencion = Intencion['tipo'];
 
 /** Lo último que se habló, para entender preguntas como "¿y mañana?". */
-export type Contexto = { ultimo?: TipoIntencion | null };
+export type Contexto = {
+  ultimo?: TipoIntencion | null;
+  /** Si la respuesta anterior fue "¿Quisiste decir…?": las opciones y la frase original. */
+  sugerencias?: { comando: string; etiqueta: string; puntaje: number }[];
+  pendiente?: string;
+};
 
 const DIAS = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 
@@ -394,6 +401,7 @@ export function interpretar(frase: string, hoy = new Date(), contexto: Contexto 
   }
 
   const porRegla =
+    reglasExtra(t) ??
     reglaHud(t) ??
     reglaRecordatorio(t, hoy) ??
     reglaAbrir(t) ??
@@ -437,4 +445,6 @@ export const EJEMPLOS = [
   'Recuérdame en 20 minutos sacar la ropa',
   '¿Cómo voy hoy?',
   'Abona 10 lucas a mi meta',
+  '¿Cómo me fue este mes?',
+  '¿Cómo hago un respaldo?',
 ];

@@ -78,7 +78,7 @@ export function AsistenteSettings() {
           configurarVoz({ estilo: v });
         }}
         options={[
-          { value: 'jarvis', label: 'Jarvis' },
+          { value: 'jarvis', label: 'Estilo Jarvis' },
           { value: 'cercano', label: 'Cercano' },
         ]}
       />
@@ -130,7 +130,7 @@ export function AsistenteSettings() {
 
       <View style={{ marginTop: space.md }}>
         {fila(
-          'Escuchar "Jarvis" o "ey Tinzit0"',
+          'Escuchar "Tinzit0" o "Jarvis"',
           vozDisponible
             ? 'Solo con la app abierta. Gasta algo más de batería y Android puede sonar un "bip" al reactivar el micrófono.'
             : 'Disponible en la app instalada (no en Expo Go).',

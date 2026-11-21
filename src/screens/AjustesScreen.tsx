@@ -118,7 +118,7 @@ export function AjustesScreen() {
         <NotifSettings />
       </Section>
 
-      <Section title="Asistente · Jarvis">
+      <Section title="Asistente · Tinzit0">
         <AsistenteSettings />
       </Section>
 

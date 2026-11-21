@@ -14,8 +14,10 @@ import {
   useFonts,
 } from '@expo-google-fonts/inter';
 import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AppLifecycle } from '@/components/AppLifecycle';
@@ -26,10 +28,18 @@ import { VozProvider } from '@/voice/VozProvider';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { fonts } from '@/theme/tokens';
 
+// La pantalla de carga se queda hasta que la app esté lista, y se va con un fundido suave.
+SplashScreen.preventAutoHideAsync().catch(() => {});
+SplashScreen.setOptions({ duration: 250, fade: true });
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold });
 
-  // Mientras carga la fuente se mantiene la pantalla de inicio (splash).
+  useEffect(() => {
+    if (fontsLoaded) SplashScreen.hideAsync().catch(() => {});
+  }, [fontsLoaded]);
+
+  // Mientras carga la fuente se mantiene la pantalla de carga (splash).
   if (!fontsLoaded) return null;
 
   return (

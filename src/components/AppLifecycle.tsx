@@ -3,6 +3,7 @@
  * - Pide permiso de notificaciones la primera vez.
  * - Suma los gastos fijos que ya tocaron este mes.
  * - Reprograma las notificaciones con los datos al día.
+ * - Actualiza el widget de la pantalla de inicio.
  * - Si tocas una notificación, te lleva a la pantalla correspondiente.
  * No dibuja nada en pantalla.
  */
@@ -14,6 +15,7 @@ import { AppState, Platform } from 'react-native';
 
 import { aplicarFijosDelMes } from '@/database/fijos';
 import { prepararNotificaciones, reprogramarTodo } from '@/notifications/programar';
+import { actualizarWidget } from '@/widget';
 
 export function AppLifecycle() {
   const db = useSQLiteContext();
@@ -25,6 +27,7 @@ export function AppLifecycle() {
     const alDia = async () => {
       await aplicarFijosDelMes(db).catch(console.warn);
       await reprogramarTodo(db);
+      await actualizarWidget(db);
     };
 
     prepararNotificaciones(true)

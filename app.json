@@ -11,10 +11,10 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0B0B0C",
-        "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png",
+        "backgroundColor": "#0B0B0C"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.tinzit0.app"
@@ -41,7 +41,43 @@
         }
       ],
       "expo-secure-store",
-      "./plugins/withAppQueries"
+      "./plugins/withAppQueries",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 132,
+          "resizeMode": "contain",
+          "backgroundColor": "#0B0B0C",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#0B0B0C"
+          }
+        }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "fonts": [
+            "./assets/fonts/Inter_700Bold.ttf",
+            "./assets/fonts/Inter_500Medium.ttf"
+          ],
+          "widgets": [
+            {
+              "name": "Resumen",
+              "label": "Tinzit0 · Hoy",
+              "description": "Tus tareas de hoy y el gasto de la semana",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000,
+              "previewImage": "./assets/widget-preview.png"
+            }
+          ]
+        }
+      ]
     ],
     "scheme": "tinzit0",
     "backgroundColor": "#0B0B0C"

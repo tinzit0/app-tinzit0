@@ -15,6 +15,7 @@ import * as cuerpo from '../src/database/cuerpo';
 import * as habitos from '../src/database/habitos';
 import * as logros from '../src/database/logros';
 import { compararMes } from '../src/database/estadisticas';
+import { datosWidget } from '../src/widget/datos';
 import { mensajeDomingo, mensajeManana } from '../src/notifications/mensajes';
 import { getResumenHoy } from '../src/database/queries';
 import { toISODate, endOfWeek } from '../src/utils/fechas';
@@ -118,6 +119,11 @@ async function main() {
   assert.equal(est.actual.diasGym.length, 1);
   assert.ok(est.actual.gastoTotal >= 7500);
   assert.equal(est.actual.habitos.length, 1);
+
+  // Widget
+  const w = await datosWidget(db);
+  assert.equal(w.pendientes, 0);
+  assert.ok(w.gastoSemana >= 7500);
 
   // Mensajes
   assert.ok(mensajeManana({ nombre: 'Tin', tareas: 2, gym: 'Pecho' }).cuerpo.includes('2 tareas'));

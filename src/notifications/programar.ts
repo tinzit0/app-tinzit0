@@ -18,10 +18,11 @@ import { fijosQueVencenEn } from '@/database/fijos';
 import { diasEntrenados, rutinaDeHoy } from '@/database/gym';
 import { getSetting } from '@/database/queries';
 import { necesitaRespaldo } from '@/database/respaldo';
+import { minutosEstudio, proximasEvaluaciones, todosLosBloques } from '@/database/estudio';
 import { completadasEnRango, tareasDelDia } from '@/database/tareas';
 import { consejoClima, diaDe, obtenerClima, resumenCorto } from '@/clima/clima';
 import { toISODate, weekdayMonFirst } from '@/utils/fechas';
-import { mensajeDomingo, mensajeGastoFijo, mensajeManana, mensajeNoche, MENSAJE_PRUEBA } from './mensajes';
+import { mensajeClase, mensajeDomingo, mensajeGastoFijo, mensajeManana, mensajeNoche, mensajePrueba, MENSAJE_PRUEBA } from './mensajes';
 
 const CANAL = 'tinzit0';
 const DIAS_ADELANTE = 7;
@@ -87,7 +88,7 @@ export function reprogramarTodo(db: SQLiteDatabase): Promise<void> {
       const agendadas = await Notifications.getAllScheduledNotificationsAsync();
       await Promise.all(
         agendadas
-          .filter((n) => n.content.data?.tipo !== 'descanso' && n.content.data?.tipo !== 'recordatorio')
+          .filter((n) => !['descanso', 'recordatorio', 'pomodoro'].includes(String(n.content.data?.tipo ?? '')))
           .map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)),
       );
 
@@ -96,12 +97,17 @@ export function reprogramarTodo(db: SQLiteDatabase): Promise<void> {
       const manana = leerHora(await getSetting(db, 'hora_manana'), '08:00');
       const noche = leerHora(await getSetting(db, 'hora_noche'), '21:30');
       const domingo = leerHora(await getSetting(db, 'hora_domingo'), '20:00');
-      const [onManana, onNoche, onDomingo, onFijos] = await Promise.all([
+      const [onManana, onNoche, onDomingo, onFijos, onClases, onPruebas] = await Promise.all([
         on('notif_manana'),
         on('notif_noche'),
         on('notif_domingo'),
         on('notif_fijos'),
+        on('notif_clases'),
+        on('notif_pruebas'),
       ]);
+      const avisoClase = Number((await getSetting(db, 'aviso_clase_min')) ?? 10) || 10;
+      const bloques = onClases ? await todosLosBloques(db) : [];
+      const pruebas = (await proximasEvaluaciones(db, DIAS_ADELANTE + 1)).filter((e) => e.grade == null);
 
       // Pronóstico de 7 días (del caché o de internet). Si no hay conexión, las notificaciones van sin clima.
       const pronostico = await obtenerClima(db).catch(() => null);
@@ -133,8 +139,28 @@ export function reprogramarTodo(db: SQLiteDatabase): Promise<void> {
             gasto: await totalEnRango(db, semana),
             gastoAnterior: await totalEnRango(db, rangoSemanaAnterior(dia)),
             pedirRespaldo: await necesitaRespaldo(db),
+            estudioMin: (await minutosEstudio(db, semana.desde, semana.hasta)).total,
+            pruebasProximas: pruebas.filter((e) => e.date && e.date > iso && e.date <= toISODate(new Date(dia.getFullYear(), dia.getMonth(), dia.getDate() + 7))).length,
           });
           await agendar(d.titulo, d.cuerpo, enFecha(dia, domingo.h, domingo.m), { ruta: '/' });
+        }
+        // Clases: un aviso unos minutos antes de cada bloque.
+        for (const b of bloques.filter((x) => x.weekday === weekdayMonFirst(dia))) {
+          const [h, m] = b.start_time.split(':').map(Number);
+          const c = mensajeClase({ ramo: b.name, sala: b.sala, minutos: avisoClase, hora: b.start_time });
+          await agendar(c.titulo, c.cuerpo, enFecha(dia, h, m - avisoClase), { ruta: '/horario' });
+        }
+        // Pruebas: la noche anterior y la mañana del día.
+        if (onPruebas) {
+          const manianaIso = toISODate(new Date(dia.getFullYear(), dia.getMonth(), dia.getDate() + 1));
+          for (const e of pruebas.filter((x) => x.date === manianaIso)) {
+            const p = mensajePrueba({ nombre: e.name, ramo: e.ramo, manana: true });
+            await agendar(p.titulo, p.cuerpo, enFecha(dia, noche.h, noche.m + 2), { ruta: '/estudio' });
+          }
+          for (const e of pruebas.filter((x) => x.date === iso)) {
+            const p = mensajePrueba({ nombre: e.name, ramo: e.ramo, manana: false });
+            await agendar(p.titulo, p.cuerpo, enFecha(dia, manana.h, manana.m + 2), { ruta: '/estudio' });
+          }
         }
         if (onFijos) {
           // Aviso un día antes de cada gasto fijo, a la hora de la mañana.

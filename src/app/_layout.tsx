@@ -101,6 +101,16 @@ function RootStack() {
         <Stack.Screen name="asistente" options={{ title: 'Tinzit0' }} />
         <Stack.Screen name="clima" options={{ title: 'Clima' }} />
         <Stack.Screen name="musica" options={{ title: 'Música' }} />
+        <Stack.Screen name="estudio" options={{ title: 'Estudio' }} />
+        <Stack.Screen name="ramo" options={{ title: 'Ramo' }} />
+        <Stack.Screen name="ramo-form" options={{ presentation: 'modal', title: 'Ramo' }} />
+        <Stack.Screen name="evaluacion" options={{ presentation: 'modal', title: 'Evaluación' }} />
+        <Stack.Screen name="horario" options={{ title: 'Horario' }} />
+        <Stack.Screen name="pomodoro" options={{ title: 'Modo enfoque' }} />
+        <Stack.Screen name="tarjetas" options={{ title: 'Tarjetas' }} />
+        <Stack.Screen name="repaso" options={{ title: 'Repaso' }} />
+        <Stack.Screen name="grabar" options={{ title: 'Grabar clase' }} />
+        <Stack.Screen name="escanear" options={{ title: 'Escanear apuntes' }} />
       </Stack>
     </>
   );

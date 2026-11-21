@@ -146,11 +146,12 @@ export function liberarIA() {
   datosCambiaron = false;
 }
 
-const SISTEMA = (resumen: string, trato: string, estilo: string) => `Eres Tinzit0, el asistente personal de la app Tinzit0 (tareas, gastos en pesos chilenos, gastos fijos, metas de ahorro, gym, peso, hábitos, notas, clima, medallas y estadísticas). Hablas español${estilo === 'jarvis' ? `, con tono de mayordomo elegante y sereno; llamas al usuario "${trato}"` : ' chileno informal y cercano'}.
+const SISTEMA = (resumen: string, trato: string, estilo: string) => `Eres Tinzit0, el asistente personal de la app Tinzit0 (tareas, gastos en pesos chilenos, gastos fijos, metas de ahorro, gym, peso, hábitos, notas, clima, medallas, estadísticas y modo estudiante: ramos, notas 1,0 a 7,0, horario, asistencia, pruebas, pomodoro y tarjetas). Hablas español${estilo === 'jarvis' ? `, con tono de mayordomo elegante y sereno; llamas al usuario "${trato}"` : ' chileno informal y cercano'}.
 
 Reglas:
 - Responde en 1 o 2 frases cortas, sin listas, sin emojis, sin markdown. Tus respuestas se leen en voz alta.
-- Si el usuario quiere HACER algo o pide un dato concreto de la app, llama a la herramienta "ejecutar_comando" con una frase simple en español, como estos ejemplos: ${EJEMPLOS.map((e) => `"${e}"`).join(', ')}, "anota un gasto de 3000 en transporte", "agrega una tarea comprar leche mañana", "el lunes toca piernas", "crea un hábito de meditar", "cómo hago un respaldo", "pon música para entrenar en spotify", "pausa la música", "siguiente canción", "qué canción está sonando", "busca recetas de pan en youtube", "llévame a la plaza de armas", "manda un whatsapp que diga voy en camino", "abre instagram", "pon un temporizador de 90 segundos", "recuérdame en 20 minutos tomar agua".
+- Si el usuario quiere HACER algo o pide un dato concreto de la app, llama a la herramienta "ejecutar_comando" con una frase simple en español, como estos ejemplos: ${EJEMPLOS.map((e) => `"${e}"`).join(', ')}, "anota un gasto de 3000 en transporte", "agrega una tarea comprar leche mañana", "el lunes toca piernas", "crea un hábito de meditar", "cómo hago un respaldo", "pon música para entrenar en spotify", "pausa la música", "siguiente canción", "qué canción está sonando", "busca recetas de pan en youtube", "llévame a la plaza de armas", "manda un whatsapp que diga voy en camino", "abre instagram", "pon un temporizador de 90 segundos", "recuérdame en 20 minutos tomar agua", "cómo voy en cálculo", "cuánto necesito en el examen de física", "me saqué un 5,5 en la prueba 1 de cálculo", "qué clase tengo ahora", "qué clases tengo mañana", "falté a física", "tengo prueba de química el viernes", "cuándo es mi próxima prueba", "modo enfoque de cálculo", "cuánto estudié esta semana", "resumen de la semana", "repasar tarjetas".
+- Las notas de la universidad van de 1,0 a 7,0 y se aprueba con 4,0.
 - También puedes usar las apps del celular (Spotify, YouTube, Maps, WhatsApp, Google y otras) con esa misma herramienta.
 - Si el usuario pide varias cosas, llama a la herramienta una vez por cada una.
 - Para preguntas o consejos, usa los DATOS de abajo. No inventes datos que no estén ahí.
@@ -209,6 +210,38 @@ async function obtenerSesion(db: SQLiteDatabase): Promise<Sesion> {
     return await cargando;
   } finally {
     cargando = null;
+  }
+}
+
+/**
+ * Usa la IA para una tarea de texto suelta (resumir una clase, crear tarjetas).
+ * Abre una sesión aparte, sin herramientas, y la cierra al terminar para liberar memoria.
+ * Lanza error si la IA no está descargada: quien llama usa el método sin IA.
+ */
+export async function generarTexto(db: SQLiteDatabase, instruccion: string, texto: string, onToken?: (t: string) => void): Promise<string> {
+  const l = cargarLib();
+  const m = await modeloLocal(db);
+  if (!l || !m || (await getSetting(db, 'ia_activa')) === '0') throw new Error('ia-no-lista');
+  liberarIA(); // el modelo no cabe dos veces en memoria
+  const s = await l.createLLMChatSession(m, {
+    initialMessages: [{ role: 'system', content: `Eres un asistente de estudio. Respondes en español, claro y breve, sin markdown. ${instruccion}` }],
+    generationConfig: { temperature: 0.2, maxNewTokens: 600, enableThinking: false },
+  });
+  const corte = setTimeout(() => s.stop(), 90_000);
+  try {
+    // El modelo es chico: le pasamos como máximo ~6.000 caracteres.
+    const turno = await s.sendMessage(texto.slice(0, 6000), onToken);
+    const ultimo = [...turno.messages].reverse().find((x) => x.role === 'assistant');
+    const out = sinPensamiento(typeof ultimo?.content === 'string' ? ultimo.content : '').trim();
+    if (!out) throw new Error('ia-sin-respuesta');
+    return out;
+  } finally {
+    clearTimeout(corte);
+    try {
+      s.dispose();
+    } catch {
+      // ya liberada
+    }
   }
 }
 

@@ -20,9 +20,11 @@ type Props = {
   min?: number;
   decimals?: boolean;
   suffix?: string;
+  /** Decimales fijos al mostrar, con coma (ej: 1 → "4,0" para notas). */
+  fijo?: number;
 };
 
-export function Stepper({ label, value, onChange, step = 1, min = 0, decimals, suffix }: Props) {
+export function Stepper({ label, value, onChange, step = 1, min = 0, decimals, suffix, fijo }: Props) {
   const { colors } = useTheme();
   const [texto, setTexto] = useState<string | null>(null);
 
@@ -53,7 +55,7 @@ export function Stepper({ label, value, onChange, step = 1, min = 0, decimals, s
         <View style={styles.valueWrap}>
           <TextInput
             // Mientras escribes mostramos tu texto tal cual (así "22." no se vuelve "22").
-            value={texto ?? String(value)}
+            value={texto ?? (fijo != null ? value.toFixed(fijo).replace('.', ',') : String(value))}
             onFocus={() => setTexto(String(value))}
             onBlur={() => setTexto(null)}
             onChangeText={(t) => {

@@ -12,7 +12,7 @@ export type IntencionApps =
   | { tipo: 'app_accion'; accion: 'youtube' | 'google' | 'navegar' | 'mapa' | 'whatsapp' | 'llamar'; texto: string };
 
 /** Destinos que son pantallas de Tinzit0 (no lugares del mapa). */
-const PANTALLAS = /^(mis |la |el |los |las |mi )?(gastos?|tareas?|gym|notas?|habitos?|metas?|fijos|clima|estadisticas|medallas|logros|ajustes|rutina|peso|cuerpo|apps|hoy|inicio|historial|configuracion)\b/;
+const PANTALLAS = /^(mis |la |el |los |las |mi )?(gastos?|tareas?|gym|notas?|habitos?|metas?|fijos|clima|estadisticas|medallas|logros|ajustes|rutina|peso|cuerpo|apps|hoy|inicio|historial|configuracion|ramos?|horario|estudio|tarjetas|clases?)\b/;
 
 const limpiar = (s: string) => s.replace(/\s+por favor$/, '').replace(/\s+/g, ' ').trim();
 

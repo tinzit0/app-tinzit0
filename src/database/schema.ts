@@ -195,6 +195,79 @@ const MIGRATIONS: string[] = [
     usos    INTEGER NOT NULL DEFAULT 0
   );
   `,
+
+  // v7 — Modo Estudiante: ramos, horario, evaluaciones (notas 1.0–7.0), asistencia,
+  // sesiones de estudio (pomodoro) y tarjetas de memoria con repetición espaciada.
+  `
+  CREATE TABLE IF NOT EXISTS courses (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    name           TEXT NOT NULL,
+    color          TEXT NOT NULL DEFAULT '#CFF56B',
+    teacher        TEXT,
+    room           TEXT,
+    passing        REAL NOT NULL DEFAULT 4.0,     -- nota para aprobar
+    min_attendance INTEGER NOT NULL DEFAULT 75,   -- % de asistencia mínima
+    archived       INTEGER NOT NULL DEFAULT 0,
+    created_at     TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+
+  CREATE TABLE IF NOT EXISTS class_blocks (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    course_id  INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    weekday    INTEGER NOT NULL,                  -- 1 = lunes … 7 = domingo
+    start_time TEXT NOT NULL,                     -- 'HH:MM'
+    end_time   TEXT NOT NULL,
+    room       TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS evaluations (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    course_id   INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,
+    weight      REAL NOT NULL DEFAULT 0,          -- ponderación en %
+    grade       REAL,                             -- null = aún sin nota
+    date        TEXT,                             -- fecha de la prueba (opcional)
+    study_hours REAL NOT NULL DEFAULT 0,          -- horas a repartir en el plan de estudio
+    created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_eval_date ON evaluations(date);
+
+  CREATE TABLE IF NOT EXISTS attendance (
+    course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    date      TEXT NOT NULL,
+    present   INTEGER NOT NULL,
+    PRIMARY KEY (course_id, date)
+  );
+
+  CREATE TABLE IF NOT EXISTS study_sessions (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    course_id  INTEGER REFERENCES courses(id) ON DELETE SET NULL,
+    date       TEXT NOT NULL,
+    minutes    INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_study_date ON study_sessions(date);
+
+  CREATE TABLE IF NOT EXISTS flashcards (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    course_id  INTEGER REFERENCES courses(id) ON DELETE SET NULL,
+    front      TEXT NOT NULL,
+    back       TEXT NOT NULL,
+    ease       REAL NOT NULL DEFAULT 2.5,
+    interval   INTEGER NOT NULL DEFAULT 0,        -- días hasta el próximo repaso
+    reps       INTEGER NOT NULL DEFAULT 0,
+    due        TEXT NOT NULL,                     -- fecha del próximo repaso
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_cards_due ON flashcards(due);
+
+  -- Las tareas del plan de estudio quedan ligadas a su evaluación (para rehacer el plan).
+  ALTER TABLE tasks ADD COLUMN evaluation_id INTEGER;
+
+  INSERT OR IGNORE INTO settings (key, value) VALUES
+    ('notif_clases', '1'), ('aviso_clase_min', '10'), ('notif_pruebas', '1'),
+    ('pomodoro_min', '25'), ('pomodoro_descanso', '5');
+  `,
 ];
 
 /** Se llama una vez al abrir la app (desde SQLiteProvider en el _layout raíz). */

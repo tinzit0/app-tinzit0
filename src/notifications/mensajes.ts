@@ -55,11 +55,14 @@ export function mensajeDomingo(p: {
   gasto: number;
   gastoAnterior: number;
   pedirRespaldo: boolean;
+  estudioMin?: number;
+  pruebasProximas?: number;
 }) {
   const lineas = [
     `✅ ${plural(p.tareas, 'tarea completada', 'tareas completadas')}`,
     `💪 ${plural(p.gym, 'día de gym', 'días de gym')}`,
   ];
+  if (p.estudioMin) lineas.push(`📚 ${p.estudioMin >= 60 ? `${Math.round(p.estudioMin / 6) / 10} h`.replace('.', ',') : `${p.estudioMin} min`} de estudio`);
   if (p.gastoAnterior > 0) {
     const dif = p.gasto - p.gastoAnterior;
     lineas.push(
@@ -68,6 +71,7 @@ export function mensajeDomingo(p: {
   } else {
     lineas.push(`💸 ${formatCLP(p.gasto)} gastados`);
   }
+  if (p.pruebasProximas) lineas.push(`📝 ${plural(p.pruebasProximas, 'prueba', 'pruebas')} la próxima semana`);
   if (p.pedirRespaldo) lineas.push('☁️ Y aprovecha de hacer tu respaldo semanal');
 
   const buenaSemana = p.tareas >= 10 || p.gym >= 3;
@@ -92,3 +96,22 @@ export const MENSAJE_PRUEBA = {
   titulo: 'Hola, soy Tinzit0 👋',
   cuerpo: 'Así te voy a ir hablando. Si ves esto, las notificaciones funcionan perfecto.',
 };
+
+export function mensajeClase(p: { ramo: string; sala: string | null; minutos: number; hora: string }) {
+  return {
+    titulo: `📚 ${p.ramo} en ${p.minutos} min`,
+    cuerpo: `A las ${p.hora}${p.sala ? ` en la sala ${p.sala}` : ''}. ${alAzar(['¡Vamos que se puede!', 'Llega con tiempo 🏃', 'Tú dale 💪'])}`,
+  };
+}
+
+export function mensajePrueba(p: { nombre: string; ramo: string; manana: boolean }) {
+  return p.manana
+    ? {
+        titulo: `📝 Mañana: ${p.nombre} de ${p.ramo}`,
+        cuerpo: alAzar(['Repasa lo clave y duerme bien, eso también suma.', 'Un repaso corto y a dormir temprano. ¡Tú puedes!']),
+      }
+    : {
+        titulo: `📝 Hoy: ${p.nombre} de ${p.ramo}`,
+        cuerpo: alAzar(['Respira, confía en lo que estudiaste. ¡Éxito!', 'Hoy es el día. ¡Mucho éxito! 🍀']),
+      };
+}

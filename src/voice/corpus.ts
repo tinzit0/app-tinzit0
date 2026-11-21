@@ -116,6 +116,41 @@ export const CORPUS: GrupoCorpus[] = [
     ejemplos: ['no tengo ganas', 'estoy aburrido', 'me da flojera', 'ando bajoneado', 'dame ánimo', 'necesito motivación'],
   },
   {
+    comando: 'cuál es mi promedio',
+    etiqueta: 'Ver tu promedio',
+    ejemplos: ['cómo voy en la u', 'cómo van mis notas', 'mis notas de la universidad', 'cómo voy en los ramos', 'estoy aprobando', 'voy a pasar los ramos', 'mi rendimiento académico'],
+  },
+  {
+    comando: 'qué clase tengo ahora',
+    etiqueta: 'Ver tu próxima clase',
+    ejemplos: ['me toca clase', 'tengo clase ahora', 'a qué hora entro', 'dónde tengo que ir', 'cuál es la sala', 'qué viene ahora en la u'],
+  },
+  {
+    comando: 'cuándo es mi próxima prueba',
+    etiqueta: 'Ver tus próximas pruebas',
+    ejemplos: ['qué evaluaciones vienen', 'tengo algo que estudiar', 'cuándo son los exámenes', 'se viene alguna prueba', 'calendario de pruebas'],
+  },
+  {
+    comando: 'modo enfoque',
+    etiqueta: 'Empezar a estudiar (pomodoro)',
+    ejemplos: ['necesito concentrarme', 'quiero ponerme a estudiar', 'temporizador para estudiar', 'ayúdame a concentrarme', 'voy a estudiar un rato'],
+  },
+  {
+    comando: 'cuánto estudié esta semana',
+    etiqueta: 'Ver horas de estudio',
+    ejemplos: ['cuánto llevo estudiado', 'horas estudiadas', 'he estudiado harto', 'tiempo estudiando'],
+  },
+  {
+    comando: 'repasar tarjetas',
+    etiqueta: 'Repasar tus tarjetas',
+    ejemplos: ['quiero memorizar', 'practicar la materia', 'tomarme la lección', 'hazme preguntas', 'estudiar con tarjetas'],
+  },
+  {
+    comando: 'resumen de la semana',
+    etiqueta: 'Resumen de tu semana',
+    ejemplos: ['qué hice esta semana', 'balance semanal', 'cómo estuvo la semana', 'resumen semanal'],
+  },
+  {
     comando: 'ayuda',
     etiqueta: 'Qué puedo pedirte',
     ejemplos: ['qué sabes hacer', 'qué haces', 'para qué sirves', 'qué funciones tienes', 'qué puedo decirte', 'cómo te uso'],

@@ -26,7 +26,21 @@ import {
 } from '@/database/gastos';
 import { compararMes } from '@/database/estadisticas';
 import { diaDePagoEn, listarFijos } from '@/database/fijos';
-import { agregarSerie, guardarDiaRutina, listarEjercicios, obtenerOCrearEjercicio, obtenerRutina, rutinaDeHoy, seriesDeFecha, ultimaSerie } from '@/database/gym';
+import {
+  buscarRamo,
+  contarPendientes,
+  crearEvaluacion,
+  evaluacionesDeRamo,
+  listarRamos,
+  marcarAsistencia,
+  minutosEstudio,
+  ponerNota,
+  proximasEvaluaciones,
+  resumenRamo,
+  todosLosBloques,
+} from '@/database/estudio';
+import { bloquesDelDia, claseAhora, formatoHoras, formatoNota, minutosHasta, redondearNota, textoNecesaria } from '@/estudio/logica';
+import { agregarSerie, diasEntrenados, guardarDiaRutina, listarEjercicios, obtenerOCrearEjercicio, obtenerRutina, rutinaDeHoy, seriesDeFecha, ultimaSerie } from '@/database/gym';
 import { desbloqueados, LOGROS } from '@/database/logros';
 import { alternarHabito, crearHabito, listarHabitos, SUGERENCIAS } from '@/database/habitos';
 import { abonar, buscarMeta, crearMeta, listarMetas } from '@/database/metas';
@@ -34,6 +48,7 @@ import { guardarNota, listarNotas } from '@/database/notas';
 import { getSetting, setSetting } from '@/database/queries';
 import {
   alternarTarea,
+  completadasEnRango,
   crearTarea,
   eliminarTarea,
   moverTarea,
@@ -43,7 +58,7 @@ import {
 } from '@/database/tareas';
 import { CATALOGO_APPS } from '@/utils/apps';
 import { categoria } from '@/utils/categorias';
-import { fechaLarga, fromISODate, startOfWeek, toISODate } from '@/utils/fechas';
+import { fechaLarga, fromISODate, nombreDiaMonFirst, startOfWeek, toISODate } from '@/utils/fechas';
 import { ENLACES } from '@/utils/enlaces';
 import { formatCLP } from '@/utils/moneda';
 import type { CambioHud, Panel } from '@/jarvis/paneles';
@@ -106,6 +121,11 @@ function nombreDia(iso: string) {
   return `el ${fechaLarga(fromISODate(iso)).toLowerCase()}`;
 }
 
+/** Días desde hoy hasta una fecha ISO. */
+function diasHasta(iso: string) {
+  return Math.round((fromISODate(iso).getTime() - fromISODate(toISODate()).getTime()) / 86400000);
+}
+
 /** Pantallas a las que se puede ir por voz. */
 const PANTALLAS: [RegExp, string][] = [
   [/^(hoy|inicio|home|principal)/, '/'],
@@ -124,6 +144,10 @@ const PANTALLAS: [RegExp, string][] = [
   [/^(peso|cuerpo|medidas)/, '/cuerpo'],
   [/^(apps|aplicaciones)/, '/apps'],
   [/^(musica|reproductor|mi musica)/, '/musica'],
+  [/^(estudio|ramos?|cursos|modo estudiante|universidad)/, '/estudio'],
+  [/^horario/, '/horario'],
+  [/^(tarjetas|flashcards)/, '/tarjetas'],
+  [/^(pomodoro|enfoque|modo enfoque)/, '/pomodoro'],
 ];
 
 export async function responder(db: SQLiteDatabase, frase: string, contexto: Contexto = {}, sistema: Sistema = {}): Promise<Respuesta> {
@@ -674,6 +698,13 @@ export async function ejecutar(db: SQLiteDatabase, i: Intencion, sistema: Sistem
         apps: ['En Hoy, "Tus apps" → Editar, eliges hasta 8 apps para abrirlas de un toque. También puedes decirme "abre WhatsApp".', '/apps'],
         clima: ['El clima aparece en Hoy. Para cambiar la ciudad ve a Ajustes → Clima, o usa tu ubicación.', '/clima'],
         estadisticas: ['En Hoy toca "Tu mes en números", o dime "cómo me fue este mes".', '/estadisticas'],
+        estudio: ['En Hoy toca "Estudio" → "Nuevo ramo". En cada ramo agregas tus evaluaciones con su ponderación y nota (de 1,0 a 7,0) y te digo tu promedio y cuánto necesitas para el 4,0. También puedes decirme "me saqué un 5,5 en la prueba de cálculo" o "tengo prueba de química el viernes" y te armo un plan de estudio.', '/estudio'],
+        horario: ['Abre un ramo, toca el lápiz y agrega sus bloques (día y hora). Te aviso 10 minutos antes de cada clase y en Hoy ves la clase de ahora. Pregúntame "qué clase tengo ahora".', '/horario'],
+        asistencia: ['En cada ramo toca "Fui hoy" o "Falté hoy", o dime "falté a física". Te muestro el porcentaje y te aviso si quedas bajo el mínimo.', '/estudio'],
+        pomodoro: ['Dime "modo enfoque" o toca "Enfoque" en Estudio: 25 minutos de concentración y 5 de descanso. Te aviso al terminar y sumo las horas a tu ramo.', '/pomodoro'],
+        tarjetas: ['En Estudio → Tarjetas creas preguntas y respuestas, o las armo desde tus notas. Cuando repasas, dime qué tan bien te la sabías y te la muestro justo antes de que se te olvide.', '/tarjetas'],
+        grabar: ['En Estudio → "Grabar clase" toca el micrófono: paso a texto lo que se dice en clase. Al terminar te hago un resumen, lo guardas como nota o creo tarjetas.', '/grabar'],
+        escanear: ['En Estudio → "Escanear" saca una foto a tus apuntes o la pizarra: leo el texto sin internet, lo corriges y lo guardas como nota o tarjetas.', '/escanear'],
         logros: ['Las medallas se ganan solas al cumplir metas: tareas, días de gym, rachas, ahorro. Míralas con el trofeo en Hoy.', '/logros'],
       };
       const [texto, ruta] = AYUDA[i.tema] ?? ['Puedo ayudarte con tareas, gastos, gym, hábitos, notas, metas y clima. Pregúntame "cómo hago…" cualquier cosa.', '/'];
@@ -722,6 +753,210 @@ export async function ejecutar(db: SQLiteDatabase, i: Intencion, sistema: Sistem
           return { texto: `Llamando al ${i.texto}.`, accion: { tipo: 'url', url: ENLACES.llamar(i.texto) } };
       }
       return { texto: 'No sé hacer eso todavía.' };
+    }
+
+    // ---------- Modo Estudiante ----------
+    case 'estudio_ir':
+      return { texto: `Abriendo ${i.nombre}.`, accion: { tipo: 'navegar', ruta: i.ruta }, ruta: i.ruta };
+
+    case 'nota_promedio': {
+      if (!i.ramo) {
+        const ramos = (await listarRamos(db)).filter((r) => r.promedio != null);
+        if (!ramos.length) return { texto: 'Aún no tienes notas. Agrega tus ramos y evaluaciones en Estudio, o dime "me saqué un 5,5 en la prueba de cálculo".', ruta: '/estudio' };
+        const general = ramos.reduce((s, r) => s + (r.promedio ?? 0), 0) / ramos.length;
+        const rojos = ramos.filter((r) => redondearNota(r.promedio ?? 0) < r.passing);
+        return {
+          texto: `Tu promedio general es ${formatoNota(general)}: ${lista(ramos.map((r) => `${r.name} ${formatoNota(r.promedio)}`))}.${rojos.length ? ` Ojo con ${lista(rojos.map((r) => r.name))}.` : ' Vas aprobando todo.'}`,
+          ruta: '/estudio',
+        };
+      }
+      const ramo = await buscarRamo(db, i.ramo);
+      if (!ramo) {
+        if (i.desdeNotas) return ejecutar(db, { tipo: 'buscar_notas', texto: i.ramo }, sistema);
+        return { texto: `No tengo un ramo llamado "${i.ramo}". Agrégalo en Estudio → Nuevo ramo.`, ruta: '/estudio' };
+      }
+      const r = await resumenRamo(db, ramo);
+      if (r.promedio == null) return { texto: `En ${ramo.name} todavía no tienes notas.`, ruta: `/ramo?id=${ramo.id}` };
+      return { texto: `En ${ramo.name} llevas un ${formatoNota(r.promedio)}. ${textoNecesaria(r.necesaria, ramo.passing)}`, ruta: `/ramo?id=${ramo.id}` };
+    }
+
+    case 'nota_necesito': {
+      const ramo = await buscarRamo(db, i.ramo);
+      if (!ramo) {
+        const ramos = await listarRamos(db);
+        const urgentes = ramos.filter((r) => r.necesaria.estado === 'necesita' || r.necesaria.estado === 'imposible');
+        if (!ramos.length) return { texto: 'Primero agrega tus ramos en Estudio.', ruta: '/estudio' };
+        if (i.ramo) return { texto: `No encontré el ramo "${i.ramo}". Tus ramos son: ${lista(ramos.map((r) => r.name))}.`, ruta: '/estudio' };
+        if (!urgentes.length) return { texto: 'Con lo que llevas, no tienes ramos en riesgo. Bien ahí.', ruta: '/estudio' };
+        return { texto: urgentes.map((r) => `${r.name}: ${textoNecesaria(r.necesaria, r.passing)}`).join(' '), ruta: '/estudio' };
+      }
+      const r = await resumenRamo(db, ramo);
+      return { texto: `${ramo.name}: ${textoNecesaria(r.necesaria, ramo.passing)}`, ruta: `/ramo?id=${ramo.id}` };
+    }
+
+    case 'nota_agregar': {
+      const ramo = await buscarRamo(db, i.ramo);
+      if (!ramo) return { texto: `No tengo el ramo "${i.ramo}". Créalo en Estudio y vuelve a decírmelo.`, ruta: '/estudio' };
+      const evals = await evaluacionesDeRamo(db, ramo.id);
+      // Si nombraste la evaluación, la buscamos; si no, la primera sin nota que ya pasó.
+      const nombrada = i.evaluacion;
+      const buscada = nombrada
+        ? (evals.find((e) => parecido(nombrada, e.name) >= 0.5 && e.grade == null) ?? evals.find((e) => parecido(nombrada, e.name) >= 0.5))
+        : null;
+      const pendiente = buscada ?? (nombrada ? null : evals.find((e) => e.grade == null && (!e.date || e.date <= hoy)));
+      let nombreEval: string;
+      if (pendiente) {
+        await ponerNota(db, pendiente.id, i.nota);
+        nombreEval = pendiente.name;
+      } else {
+        nombreEval = nombrada ? mayus(nombrada) : `Nota ${evals.filter((e) => e.grade != null).length + 1}`;
+        await crearEvaluacion(db, { course_id: ramo.id, name: nombreEval, weight: 0, grade: i.nota, date: hoy, study_hours: 0 });
+      }
+      const r = await resumenRamo(db, ramo);
+      const felicita = i.nota >= 6 ? ' ¡Excelente nota! 🎉' : i.nota >= ramo.passing ? ' Bien ahí.' : ' Tranqui, todavía se puede levantar.';
+      const alerta = r.necesaria.estado === 'necesita' || r.necesaria.estado === 'imposible' ? ` ${textoNecesaria(r.necesaria, ramo.passing)}` : '';
+      return {
+        texto: `Anoté un ${formatoNota(i.nota)} en ${nombreEval} de ${ramo.name}.${felicita} Tu promedio queda en ${formatoNota(r.promedio)}.${alerta}`,
+        ruta: `/ramo?id=${ramo.id}`,
+      };
+    }
+
+    case 'clase_ahora': {
+      const bloques = await todosLosBloques(db);
+      if (!bloques.length) return { texto: 'Aún no tienes tu horario. Agrega los bloques de cada ramo en Estudio.', ruta: '/estudio' };
+      const { actual, siguiente } = claseAhora(bloques);
+      const sala = (b: { sala: string | null }) => (b.sala ? ` en la sala ${b.sala}` : '');
+      const partes: string[] = [];
+      if (actual) partes.push(`Ahora tienes ${actual.name}${sala(actual)}, hasta las ${actual.end_time}.`);
+      if (siguiente) {
+        const falta = minutosHasta(siguiente.start_time);
+        const cuando =
+          siguiente.enDias === 0
+            ? `hoy a las ${siguiente.start_time}${falta <= 60 ? ` (en ${falta} minutos)` : ''}`
+            : siguiente.enDias === 1
+              ? `mañana a las ${siguiente.start_time}`
+              : `el ${nombreDiaMonFirst(siguiente.weekday)} a las ${siguiente.start_time}`;
+        partes.push(`${actual ? 'Después' : 'Tu próxima clase'} es ${siguiente.name}${sala(siguiente)}, ${cuando}.`);
+      }
+      return { texto: partes.join(' ') || 'No tienes más clases esta semana.', ruta: '/horario' };
+    }
+
+    case 'clases_dia': {
+      const fecha = i.fecha ? fromISODate(i.fecha) : new Date();
+      const del = bloquesDelDia(await todosLosBloques(db), fecha);
+      const cuando = nombreDia(toISODate(fecha));
+      if (!del.length) return { texto: `${mayus(cuando)} no tienes clases.${cuando === 'hoy' ? ' Aprovecha de adelantar materia.' : ''}`, ruta: '/horario' };
+      return {
+        texto: `${mayus(cuando)} tienes ${del.length === 1 ? '1 clase' : `${del.length} clases`}: ${lista(del.map((b) => `${b.name} a las ${b.start_time}${b.sala ? ` (${b.sala})` : ''}`))}.`,
+        ruta: '/horario',
+      };
+    }
+
+    case 'asistencia': {
+      const ramo = await buscarRamo(db, i.ramo);
+      if (!ramo) return { texto: `No encontré el ramo "${i.ramo}".`, ruta: '/estudio' };
+      await marcarAsistencia(db, ramo.id, i.presente);
+      const r = await resumenRamo(db, ramo);
+      const riesgo = r.asistencia != null && r.asistencia < ramo.min_attendance;
+      return {
+        texto: `${i.presente ? 'Marqué que fuiste' : 'Anoté tu falta'} a ${ramo.name}. Llevas ${r.asistencia}% de asistencia (${r.faltas} ${r.faltas === 1 ? 'falta' : 'faltas'}).${riesgo ? ` Ojo: estás bajo el ${ramo.min_attendance}% mínimo.` : ''}`,
+        ruta: `/ramo?id=${ramo.id}`,
+      };
+    }
+
+    case 'asistencia_consulta': {
+      const ramo = i.ramo ? await buscarRamo(db, i.ramo) : null;
+      if (ramo) {
+        const r = await resumenRamo(db, ramo);
+        if (!r.clases) return { texto: `Aún no registras asistencia en ${ramo.name}. Dime "fui a clase de ${ramo.name}" o "falté a ${ramo.name}".`, ruta: `/ramo?id=${ramo.id}` };
+        return { texto: `En ${ramo.name} llevas ${r.asistencia}% de asistencia: ${r.faltas} ${r.faltas === 1 ? 'falta' : 'faltas'} de ${r.clases} clases.`, ruta: `/ramo?id=${ramo.id}` };
+      }
+      const ramos = (await listarRamos(db)).filter((r) => r.clases > 0);
+      if (!ramos.length) return { texto: 'Aún no registras asistencia. Dime "falté a física" o márcala en cada ramo.', ruta: '/estudio' };
+      const riesgo = ramos.filter((r) => (r.asistencia ?? 100) < r.min_attendance);
+      return {
+        texto: `${lista(ramos.map((r) => `${r.name} ${r.asistencia}% (${r.faltas} ${r.faltas === 1 ? 'falta' : 'faltas'})`))}.${riesgo.length ? ` Ojo con ${lista(riesgo.map((r) => r.name))}: bajo el mínimo.` : ''}`,
+        ruta: '/estudio',
+      };
+    }
+
+    case 'prueba_agregar': {
+      const ramo = await buscarRamo(db, i.ramo);
+      if (!ramo) return { texto: `No tengo el ramo "${i.ramo}". Créalo en Estudio → Nuevo ramo y vuelve a decírmelo.`, ruta: '/estudio' };
+      const horas = i.fecha ? Math.min(6, Math.max(1, Math.round(diasHasta(i.fecha) / 2))) : 0;
+      const id = await crearEvaluacion(db, { course_id: ramo.id, name: i.nombre, weight: 0, grade: null, date: i.fecha, study_hours: horas });
+      const plan = horas ? ` Te armé un plan de ${formatoHoras(horas)} de estudio repartido en tus tareas.` : '';
+      return {
+        texto: `Anotado: ${i.nombre} de ${ramo.name}${i.fecha ? ` ${cuandoDecir(i.fecha).replace(/^para /, '')}` : ' (sin fecha todavía)'}.${plan} Puedes ajustar la ponderación en la app.`,
+        ruta: `/evaluacion?id=${id}`,
+      };
+    }
+
+    case 'pruebas_proximas': {
+      let prox = (await proximasEvaluaciones(db, 45)).filter((e) => e.grade == null);
+      if (i.ramo) {
+        const ramo = await buscarRamo(db, i.ramo);
+        if (ramo) prox = prox.filter((e) => e.course_id === ramo.id);
+      }
+      if (!prox.length) return { texto: 'No tienes pruebas anotadas en las próximas semanas. Dime "tengo prueba de cálculo el viernes" para agregar una.', ruta: '/estudio' };
+      const fmt = (e: (typeof prox)[number]) => {
+        const d = diasHasta(e.date ?? hoy);
+        return `${e.name} de ${e.ramo} ${d === 0 ? 'hoy' : d === 1 ? 'mañana' : `en ${d} días`}`;
+      };
+      return {
+        texto: prox.length === 1 ? `Tu próxima evaluación: ${fmt(prox[0])}.` : `Tienes ${prox.length} evaluaciones: ${lista(prox.slice(0, 4).map(fmt))}.`,
+        ruta: '/estudio',
+      };
+    }
+
+    case 'pomodoro': {
+      const ramo = await buscarRamo(db, i.ramo);
+      const min = Number((await getSetting(db, 'pomodoro_min')) ?? 25) || 25;
+      return {
+        texto: `Modo enfoque${ramo ? ` para ${ramo.name}` : ''}: ${min} minutos de concentración. Deja el celular de lado, yo te aviso.`,
+        accion: { tipo: 'navegar', ruta: `/pomodoro?auto=1${ramo ? `&ramo=${ramo.id}` : ''}` },
+      };
+    }
+
+    case 'estudio_semana': {
+      const semana = rangoSemana(new Date());
+      const m = await minutosEstudio(db, semana.desde, semana.hasta);
+      if (!m.total) return { texto: 'Esta semana todavía no registras estudio. Dime "modo enfoque" y partimos con un pomodoro.', ruta: '/estudio' };
+      const detalle = m.porRamo.length > 1 || m.porRamo[0]?.name !== 'General' ? `: ${lista(m.porRamo.map((r) => `${r.name} ${formatoHoras(r.minutos / 60)}`))}` : '';
+      return { texto: `Esta semana estudiaste ${formatoHoras(m.total / 60)}${detalle}.`, ruta: '/estudio' };
+    }
+
+    case 'tarjetas_pendientes': {
+      const c = await contarPendientes(db);
+      const pend = c.reduce((s, x) => s + x.pendientes, 0);
+      const total = c.reduce((s, x) => s + x.total, 0);
+      if (!total) return { texto: 'Aún no tienes tarjetas. Créalas en Estudio → Tarjetas, o desde tus apuntes.', ruta: '/tarjetas' };
+      return {
+        texto: pend ? `Tienes ${pend} ${pend === 1 ? 'tarjeta' : 'tarjetas'} para repasar hoy. Dime "repasar tarjetas" y partimos.` : `Tienes todo repasado por hoy (${total} tarjetas en total).`,
+        ruta: '/tarjetas',
+      };
+    }
+
+    case 'resumen_semana': {
+      const semana = rangoSemana(new Date());
+      const [tareas, gym, gasto, estudio, prox] = await Promise.all([
+        completadasEnRango(db, semana.desde, semana.hasta),
+        diasEntrenados(db, semana),
+        totalEnRango(db, semana),
+        minutosEstudio(db, semana.desde, semana.hasta),
+        proximasEvaluaciones(db, 7),
+      ]);
+      const pend = prox.filter((e) => e.grade == null);
+      const partes = [
+        `completaste ${tareas === 1 ? '1 tarea' : `${tareas} tareas`}`,
+        estudio.total ? `estudiaste ${formatoHoras(estudio.total / 60)}` : null,
+        `fuiste ${gym === 1 ? '1 día' : `${gym} días`} al gym`,
+        `gastaste ${formatCLP(gasto)}`,
+      ].filter((x): x is string => !!x);
+      const pruebas = pend.length
+        ? ` Se ${pend.length === 1 ? 'viene 1 evaluación' : `vienen ${pend.length} evaluaciones`} en los próximos 7 días: ${lista(pend.slice(0, 3).map((e) => `${e.name} de ${e.ramo}`))}.`
+        : ' No tienes pruebas en los próximos 7 días.';
+      return { texto: `Esta semana ${lista(partes)}.${pruebas}` };
     }
 
     case 'tema_hud': {

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Tinzit0",
     "slug": "tinzit0",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -99,7 +99,15 @@
         }
       ],
       "expo-web-browser",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Tinzit0 usa la cámara para sacarle foto a tus apuntes y convertirlos en texto. Las fotos no salen del celular.",
+          "photosPermission": "Tinzit0 lee tus fotos de apuntes solo cuando tú eliges una.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "scheme": "tinzit0",
     "backgroundColor": "#0B0B0C",

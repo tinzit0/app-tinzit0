@@ -21,7 +21,7 @@ App móvil **personal** (un solo usuario, Android) para organizar el día: tarea
 ```bash
 npx expo start            # dev server (Expo Go o development build)
 npx expo start --web      # vista previa en navegador (para revisar UI con Playwright)
-npm test                  # pruebas: base de datos (node:sqlite) + asistente (90 casos)
+npm test                  # pruebas: base de datos (node:sqlite) + asistente + modo estudiante
 npx tsx scripts/test-clima.ts  # prueba real contra Open-Meteo (necesita internet)
 npx tsc --noEmit          # chequeo de tipos
 npx expo-doctor           # salud de dependencias
@@ -61,6 +61,16 @@ src/voice/similitud.ts + corpus.ts + aprender.ts   entender por parecido y apren
 src/spotify/spotify.ts   Spotify gratis: sin cuenta → intent MEDIA_PLAY_FROM_SEARCH; con Client ID del usuario (PKCE, expo-auth-session,
                          tokens en SecureStore) → qué suena, buscar, playlists; control solo Premium (si no, abre en Spotify)
 src/voice/reglasApps.ts   música (pon/pausa/siguiente/qué suena) y acciones en otras apps (YouTube, Google, Maps, WhatsApp, llamar) → utils/enlaces.ts
+src/estudio/logica.ts    MODO ESTUDIANTE (puro, probado en scripts/test-estudio.ts): notas 1,0–7,0, promedio ponderado,
+                         notaNecesaria, planEstudio (sesiones ≥1 h hasta el día antes), claseAhora, SM-2 (repasar),
+                         tarjetasDesdeTexto, resumirTexto (extractivo). conIA.ts: intenta IA local (generarTexto) y si no, sin IA.
+src/database/estudio.ts  courses, class_blocks, evaluations, attendance, study_sessions, flashcards (migración v7);
+                         el plan de estudio crea tareas con tasks.evaluation_id (se rehace al editar la evaluación)
+src/voice/reglasEstudio.ts  "cómo voy en X", "me saqué un 5,5 en…", "tengo prueba de X el viernes", "falté a X", "modo enfoque"…
+                         Va PRIMERA en interpretar (antes que "cómo voy" = resumen). Preguntas "cómo uso…" → ayuda.
+src/ia/ocr.ts            leer texto de fotos: react-native-executorch/legacy OCRModule + OCR_SPANISH (feature "ocr" en package.json)
+Pantallas de estudio     Estudio, Ramo, RamoForm, EvaluacionForm, Horario, Pomodoro, Tarjetas, Repaso, GrabarClase
+                         (dictado continuo + keep-awake + pausa de "ey Tinzit0"), Escanear (expo-image-picker)
 src/clima/clima.ts       Open-Meteo (sin key), caché 30 min en settings, Concepción por defecto
 src/widget/              datos.ts, ResumenWidget.tsx, lib.ts (carga segura), index.tsx
 src/theme/               tokens.ts, ThemeProvider.tsx (sistema/claro/oscuro)
@@ -83,10 +93,10 @@ docs/propuestas-icono.png  3 estilos de ícono (por defecto: 1 "Grafito + Lima")
 - Cerebro del asistente en 3 capas: aprendido → reglas → parecido (≥0.6) → IA en el celular (si está descargada y activa) → "¿Quisiste decir…?". Nunca servicios de pago.
 - react-native-executorch: config `"react-native-executorch": {"features": ["llm"]}` y `allowScripts` en package.json (su postinstall descarga libs nativas); minSdk 26 vía expo-build-properties.
 - Reconocimiento de voz: si Android no entrega resultado final, se usa el último parcial (reconocedor.ts). No quitar: era el bug "transcribe pero no responde".
-- Notificaciones con `data.tipo` `descanso` o `recordatorio` no se borran al reprogramar.
+- Notificaciones con `data.tipo` `descanso`, `recordatorio` o `pomodoro` no se borran al reprogramar. Los avisos de clase (`notif_clases`) y de pruebas (`notif_pruebas`) se agendan en `reprogramarTodo`.
 - Correr `npx tsc --noEmit` y `npm test` antes de cada commit. Revisar UI con Playwright en 375 px (modo claro y oscuro).
 
-## Funciones (estado al 2026-11-20)
+## Funciones (estado al 2026-11-21)
 
 Hoy (saludo, tareas, gym, gasto semanal, hábitos, apps favoritas, accesos a estadísticas/medallas, micrófono) ·
 Tareas (hoy/semana/todas, prioridad, repetición diaria o por días) · Gastos (CLP, categorías, semana/mes,
@@ -95,7 +105,9 @@ semanal, series/reps/peso, historial y gráfico, temporizador de descanso 60/90/
 Hábitos (rachas, mapa de calor) · 16 logros con celebración · Estadísticas mensuales vs mes anterior ·
 Notificaciones (mañana con clima, noche, domingo, pagos fijos; horas configurables) · Respaldo JSON exportar/importar +
 recordatorio semanal · Bloqueo con huella · Asistente de voz/texto con "ey Tinzit0" (app abierta), ~40 comandos sin internet · Clima (Open-Meteo) · Widget Android ·
-Ícono y splash.
+Ícono y splash · Modo Estudiante (ramos, notas chilenas y "cuánto necesito", horario con aviso antes de clase, asistencia,
+pruebas con plan de estudio en Tareas, Pomodoro con lofi, tarjetas con repetición espaciada, grabar clase → texto/resumen,
+escanear apuntes sin internet, resumen semanal por voz).
 
 ## Pendiente / ideas
 

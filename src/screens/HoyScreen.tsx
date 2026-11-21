@@ -22,13 +22,17 @@ import { useLogros } from '@/components/LogrosProvider';
 import { QuickApps } from '@/components/QuickApps';
 import { alternarHabito, listarHabitos, type HabitoConEstado } from '@/database/habitos';
 import { appsIniciales, listarApps, type AppFavorita } from '@/database/apps';
+import { proximasEvaluaciones, todosLosBloques, type BloqueConRamo, type EvaluacionConRamo } from '@/database/estudio';
+import { claseAhora } from '@/estudio/logica';
 import { getResumenHoy, type ResumenHoy } from '@/database/queries';
 import { necesitaRespaldo } from '@/database/respaldo';
 import { useTheme } from '@/theme/ThemeProvider';
 import { space } from '@/theme/tokens';
-import { fechaLarga, saludo } from '@/utils/fechas';
+import { fechaLarga, fromISODate, nombreDiaMonFirst, saludo, toISODate } from '@/utils/fechas';
 import { formatCLP } from '@/utils/moneda';
 import { vozDisponible } from '@/voice/reconocedor';
+
+const mayusDia = (n: number) => { const d = nombreDiaMonFirst(n); return d.charAt(0).toUpperCase() + d.slice(1); };
 
 export function HoyScreen() {
   const db = useSQLiteContext();
@@ -40,6 +44,8 @@ export function HoyScreen() {
   const [habitos, setHabitos] = useState<HabitoConEstado[]>([]);
   const [clima, setClima] = useState<Pronostico | null>(null);
   const [climaCargado, setClimaCargado] = useState(false);
+  const [bloques, setBloques] = useState<BloqueConRamo[]>([]);
+  const [prueba, setPrueba] = useState<EvaluacionConRamo | null>(null);
   const { revisar } = useLogros();
 
   // Cada vez que vuelves a esta pestaña, recargamos los datos.
@@ -54,6 +60,10 @@ export function HoyScreen() {
           setClimaCargado(true);
         })
         .catch(() => setClimaCargado(true));
+      todosLosBloques(db).then(setBloques).catch(console.warn);
+      proximasEvaluaciones(db, 14)
+        .then((p) => setPrueba(p.find((e) => e.grade == null) ?? null))
+        .catch(console.warn);
       appsIniciales(db)
         .then(() => listarApps(db))
         .then(setApps)
@@ -64,6 +74,13 @@ export function HoyScreen() {
   const ahora = new Date();
   const titulo = data?.nombre ? `${saludo(ahora)},\n${data.nombre}` : saludo(ahora);
   const totalTareas = (data?.tareasPendientes ?? 0) + (data?.tareasHechas ?? 0);
+  const clase = claseAhora(bloques);
+  const claseTexto = clase.actual
+    ? `Ahora: ${clase.actual.name}${clase.actual.sala ? ` · Sala ${clase.actual.sala}` : ''}`
+    : clase.siguiente
+      ? `${clase.siguiente.enDias === 0 ? 'Hoy' : clase.siguiente.enDias === 1 ? 'Mañana' : mayusDia(clase.siguiente.weekday)} ${clase.siguiente.start_time}: ${clase.siguiente.name}${clase.siguiente.sala ? ` · ${clase.siguiente.sala}` : ''}`
+      : null;
+  const diasPrueba = prueba?.date ? Math.round((fromISODate(prueba.date).getTime() - fromISODate(toISODate()).getTime()) / 86400000) : null;
 
   return (
     <View style={{ flex: 1 }}>
@@ -154,6 +171,24 @@ export function HoyScreen() {
           <Ionicons name="stats-chart-outline" size={20} color={colors.accent} />
           <AppText variant="callout" style={{ flex: 1 }}>Tu mes en números</AppText>
           <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+        </Card>
+
+        {/* Estudio */}
+        <Card onPress={() => router.push('/estudio')} accessibilityLabel="Abrir Estudio" style={{ marginTop: space.md }}>
+          <View style={styles.cardTop}>
+            <AppText variant="overline" tone={clase.actual ? 'accent' : 'tertiary'}>Estudio</AppText>
+            <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+          </View>
+          <AppText variant="headline" style={{ marginTop: space.md }} numberOfLines={1}>
+            {claseTexto ?? 'Ramos, notas, horario y modo enfoque'}
+          </AppText>
+          <AppText variant="caption" tone={diasPrueba != null && diasPrueba <= 2 ? 'warning' : 'secondary'} style={{ marginTop: space.xs }} numberOfLines={1}>
+            {prueba
+              ? `${prueba.name} de ${prueba.ramo} ${diasPrueba === 0 ? 'hoy' : diasPrueba === 1 ? 'mañana' : `en ${diasPrueba} días`}`
+              : bloques.length
+                ? 'Sin pruebas en las próximas 2 semanas'
+                : 'Agrega tus ramos para ver tu horario aquí'}
+          </AppText>
         </Card>
 
         {/* Música (Spotify) */}

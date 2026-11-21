@@ -14,6 +14,7 @@
 import { endOfWeek, toISODate, weekdayMonFirst } from '@/utils/fechas';
 import { parseMonto } from '@/utils/montos';
 import { reglasApps, type IntencionApps } from './reglasApps';
+import { reglasEstudio, type IntencionEstudio } from './reglasEstudio';
 import { reglasExtra, type IntencionExtra } from './reglasExtra';
 import { normalizar, sinActivacion } from './texto';
 
@@ -68,6 +69,7 @@ export type Intencion =
   | { tipo: 'fin_conversacion' }
   | IntencionExtra
   | IntencionApps
+  | IntencionEstudio
   | { tipo: 'desconocido'; texto: string };
 
 export type ColorHud = 'cian' | 'rojo' | 'azul' | 'verde' | 'morado' | 'naranjo' | 'dorado' | 'blanco' | 'rosado' | 'lima' | 'defecto';
@@ -118,7 +120,7 @@ function digitos(t: string) {
 }
 
 /** Busca una fecha en la frase: hoy, mañana, pasado mañana, el viernes, esta semana. */
-function detectarFecha(t: string, hoy: Date): { fecha: string | null; semanal: boolean; resto: string; encontrada: boolean } {
+export function detectarFecha(t: string, hoy: Date): { fecha: string | null; semanal: boolean; resto: string; encontrada: boolean } {
   let resto = t;
   const quitar = (re: RegExp) => (resto = resto.replace(re, ' ').replace(/\s+/g, ' ').trim());
   const mas = (n: number) => toISODate(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + n));
@@ -403,6 +405,7 @@ export function interpretar(frase: string, hoy = new Date(), contexto: Contexto 
   }
 
   const porRegla =
+    reglasEstudio(t, hoy, detectarFecha) ??
     reglasExtra(t) ??
     reglasApps(t) ??
     reglaHud(t) ??

@@ -152,15 +152,3 @@ console.log(ok === total ? `✅ Asistente: ${ok}/${total} frases entendidas` : `
 if (ok !== total) process.exit(1);
 })();
 
-// Resumen para la IA (sin llamar a la API)
-import { construirResumen } from '../src/voice/resumen';
-(async () => {
-  const { crearDbPrueba: crear } = await import('./db-prueba');
-  const db = await crear();
-  const r = await construirResumen(db);
-  if (!r.includes('Tareas de hoy') || !r.includes('Gasto esta semana')) {
-    console.error('❌ resumen IA incompleto', r);
-    process.exit(1);
-  }
-  console.log(`✅ Resumen para la IA: ${r.split('\n').length} líneas`);
-})();

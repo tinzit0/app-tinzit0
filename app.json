@@ -47,7 +47,6 @@
           ]
         }
       ],
-      "expo-secure-store",
       "./plugins/withAppQueries",
       [
         "expo-splash-screen",

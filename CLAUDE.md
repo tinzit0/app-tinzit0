@@ -5,12 +5,13 @@ App móvil **personal** (un solo usuario, Android) para organizar el día: tarea
 - El dueño **no es programador**: explicar en español simple, paso a paso. UI y comentarios del código en **español chileno informal** (mensajes cercanos, motivadores).
 - Flujo de trabajo: trabajar por fases, **commit + push a `main`** al cerrar cada una (repo público `github.com/tinzit0/app-tinzit0`), y explicar cómo probar en el celular.
 - Repo público: **nunca** poner datos personales (dirección, etc.) en código ni commits.
+- **Todo debe ser gratis**: el usuario pidió no usar servicios de pago (se quitó el modo IA con Claude). Preferir APIs sin clave y sin costo (ej. Open-Meteo) y funciones en el celular.
 - Diseño "alta gama": seguir los tokens de `src/theme/tokens.ts` (grafito + acento lima, Inter, letterSpacing negativo en títulos). No inventar colores sueltos.
 
 ## Stack
 
 - Expo **SDK 58**, React Native 0.88, React 19, TypeScript estricto, **Expo Router** (rutas en `src/app`).
-- `expo-sqlite` (datos), `AsyncStorage` (solo preferencia de tema), `expo-secure-store` (futura API key).
+- `expo-sqlite` (datos), `AsyncStorage` (solo preferencia de tema), 
 - `expo-notifications` (locales), `react-native-reanimated` 4 (animaciones), `react-native-svg` (gráficos hechos a mano).
 - Development build: `expo-speech-recognition` (voz), `expo-speech` (TTS), `react-native-android-widget` (widget), `expo-dev-client`.
 - Antes de usar una API de Expo, verificar la doc de SDK 58 (ver `AGENTS.md`): Expo cambia entre versiones.
@@ -48,8 +49,7 @@ src/notifications/       mensajes.ts (personalidad) + programar.ts (agenda 7 dí
 src/voice/               texto.ts (normalizar, "ey Tinzit0"), interpretar.ts (NLU local, puro, ~40 intenciones + contexto),
                          ejecutar.ts (acciones + respuestas + historial; devuelve "accion" para la UI),
                          acciones.ts (navegar / abrir app / recordatorio), reconocedor.ts, hablar.ts,
-                         VozProvider.tsx (wake word con app abierta), resumen.ts (datos para la IA),
-                         ia.ts (Claude claude-opus-5-5 + Tool Runner, carga diferida), iaConfig.ts (API key en SecureStore)
+                         VozProvider.tsx (wake word con app abierta)
 src/clima/clima.ts       Open-Meteo (sin key), caché 30 min en settings, Concepción por defecto
 src/widget/              datos.ts, ResumenWidget.tsx, lib.ts (carga segura), index.tsx
 src/theme/               tokens.ts, ThemeProvider.tsx (sistema/claro/oscuro)
@@ -68,8 +68,7 @@ docs/propuestas-icono.png  3 estilos de ícono (por defecto: 1 "Grafito + Lima")
 - Animaciones: Reanimated, solo `transform`/`opacity`, curva `Easing.bezier(0.23, 1, 0.32, 1)`, respetar "reducir movimiento". Sin animación en cambios de pestaña. Hápticos solo en eventos con significado.
 - Notificaciones: `reprogramarTodo` borra todo lo agendado **excepto** `data.tipo === 'descanso'` (temporizador).
 - Gráficos de categorías: siempre en el orden fijo de `CATEGORIAS`, colores con `colorCategoria(c, isDark)`.
-- Nueva intención del asistente: agregarla en `interpretar.ts` + `ejecutar.ts` + (si es una acción) una herramienta en `ia.ts` + un caso en `scripts/test-voz.ts`.
-- **SDK de Anthropic + Metro**: su build ESM tiene importaciones circulares que caen en runtime. `metro.config.js` fuerza la versión CommonJS (`isESMImport: false`). No quitarlo. `ia.ts` solo se importa con `await import()` para no cargar el SDK al abrir la app.
+- Nueva intención del asistente: agregarla en `interpretar.ts` + `ejecutar.ts` + un caso en `scripts/test-voz.ts`.
 - Notificaciones con `data.tipo` `descanso` o `recordatorio` no se borran al reprogramar.
 - Correr `npx tsc --noEmit` y `npm test` antes de cada commit. Revisar UI con Playwright en 375 px (modo claro y oscuro).
 
@@ -81,7 +80,7 @@ presupuesto con aviso 80/100 %, gastos fijos con cobro automático, metas de aho
 semanal, series/reps/peso, historial y gráfico, temporizador de descanso 60/90/120 s, peso y medidas) · Notas ·
 Hábitos (rachas, mapa de calor) · 16 logros con celebración · Estadísticas mensuales vs mes anterior ·
 Notificaciones (mañana con clima, noche, domingo, pagos fijos; horas configurables) · Respaldo JSON exportar/importar +
-recordatorio semanal · Bloqueo con huella · Asistente de voz/texto con "ey Tinzit0" (app abierta), ~40 comandos sin internet y modo IA opcional con Claude (API key del usuario) · Clima (Open-Meteo) · Widget Android ·
+recordatorio semanal · Bloqueo con huella · Asistente de voz/texto con "ey Tinzit0" (app abierta), ~40 comandos sin internet · Clima (Open-Meteo) · Widget Android ·
 Ícono y splash.
 
 ## Pendiente / ideas

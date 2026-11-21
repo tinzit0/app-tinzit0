@@ -7,8 +7,6 @@
  * - accion: algo que la PANTALLA debe hacer (navegar, abrir una app, programar
  *   un recordatorio). Se separa así para que este archivo no dependa de módulos
  *   del celular y se pueda probar en el computador.
- *
- * Lo usan tanto el modo sin internet (interpretar.ts) como la IA (ia.ts).
  */
 import type { SQLiteDatabase } from 'expo-sqlite';
 

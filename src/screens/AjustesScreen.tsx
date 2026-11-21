@@ -1,5 +1,5 @@
 /**
- * Ajustes: perfil, notificaciones, presupuesto, seguridad (huella), respaldo y apariencia.
+ * Ajustes: perfil, notificaciones, asistente de voz, presupuesto, seguridad (huella), respaldo y apariencia.
  */
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
@@ -10,6 +10,7 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { useLock } from '@/components/LockGate';
 import { NotifSettings } from '@/components/NotifSettings';
+import { AsistenteSettings } from '@/components/AsistenteSettings';
 import { SegmentedControl } from '@/components/SegmentedControl';
 import { getSetting, setSetting } from '@/database/queries';
 import { elegirRespaldo, exportarRespaldo, restaurarRespaldo } from '@/database/respaldo';
@@ -114,6 +115,10 @@ export function AjustesScreen() {
 
       <Section title="Notificaciones">
         <NotifSettings />
+      </Section>
+
+      <Section title="Asistente de voz">
+        <AsistenteSettings />
       </Section>
 
       <Section title="Gastos">

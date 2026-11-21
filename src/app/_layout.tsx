@@ -22,6 +22,7 @@ import { AppLifecycle } from '@/components/AppLifecycle';
 import { LockGate } from '@/components/LockGate';
 import { LogrosProvider, useLogros } from '@/components/LogrosProvider';
 import { migrateDb } from '@/database/schema';
+import { VozProvider } from '@/voice/VozProvider';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { fonts } from '@/theme/tokens';
 
@@ -37,7 +38,9 @@ export default function RootLayout() {
         <SQLiteProvider databaseName="tinzit0.db" onInit={migrateDb}>
           <LockGate>
             <LogrosProvider>
-              <RootStack />
+              <VozProvider>
+                <RootStack />
+              </VozProvider>
             </LogrosProvider>
           </LockGate>
         </SQLiteProvider>
@@ -85,6 +88,7 @@ function RootStack() {
         <Stack.Screen name="habito-form" options={{ presentation: 'modal', title: 'Hábito' }} />
         <Stack.Screen name="logros" options={{ title: 'Medallas' }} />
         <Stack.Screen name="estadisticas" options={{ title: 'Estadísticas' }} />
+        <Stack.Screen name="asistente" options={{ title: 'Tinzit0' }} />
       </Stack>
     </>
   );

@@ -45,7 +45,12 @@ export function parseMonto(texto: string): number | null {
   let encontrado = false;
   let ultimoMult = 0;
 
-  for (const tok of tokens) {
+  for (const [i, tok] of tokens.entries()) {
+    // "un"/"una" solo es número si viene antes de "mil", "luca", "palo"… ("un gasto" no es 1).
+    if ((tok === 'un' || tok === 'una' || tok === 'uno') && !(tokens[i + 1] in MULTIPLICADORES)) {
+      if (encontrado) break;
+      continue;
+    }
     if (/^\d+(\.\d+)?$/.test(tok)) {
       actual += Number(tok);
       encontrado = true;

@@ -11,6 +11,7 @@ import { Platform, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Card } from '@/components/Card';
+import { Fab } from '@/components/Fab';
 import { IconButton } from '@/components/IconButton';
 import { ProgressBar } from '@/components/ProgressBar';
 import { Screen } from '@/components/Screen';
@@ -25,6 +26,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { space } from '@/theme/tokens';
 import { fechaLarga, saludo } from '@/utils/fechas';
 import { formatCLP } from '@/utils/moneda';
+import { vozDisponible } from '@/voice/reconocedor';
 
 export function HoyScreen() {
   const db = useSQLiteContext();
@@ -54,108 +56,112 @@ export function HoyScreen() {
   const totalTareas = (data?.tareasPendientes ?? 0) + (data?.tareasHechas ?? 0);
 
   return (
-    <Screen
-      eyebrow={fechaLarga(ahora)}
-      title={titulo}
-      right={
-        <View style={styles.headerBtns}>
-          <IconButton icon="trophy-outline" accessibilityLabel="Ver medallas" onPress={() => router.push('/logros')} />
-          <IconButton icon="settings-outline" accessibilityLabel="Abrir ajustes" onPress={() => router.push('/ajustes')} />
-        </View>
-      }
-    >
-      {/* Recordatorio semanal de respaldo */}
-      {pedirRespaldo ? (
-        <Card
-          onPress={() => router.push('/ajustes')}
-          accessibilityLabel="Hacer respaldo"
-          style={[styles.banner, { backgroundColor: colors.warningSoft, borderColor: 'transparent' }]}
-        >
-          <Ionicons name="cloud-upload-outline" size={20} color={colors.warning} />
-          <AppText variant="callout" style={{ flex: 1 }}>
-            Hace rato que no respaldas tus datos. Tócame y lo hacemos en 10 segundos.
-          </AppText>
-        </Card>
-      ) : null}
-
-      {/* Tareas de hoy: la tarjeta principal */}
-      <Card onPress={() => router.navigate('/tareas')} accessibilityLabel="Ver tareas de hoy">
-        <View style={styles.cardTop}>
-          <AppText variant="overline" tone="tertiary">Tareas de hoy</AppText>
-          <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
-        </View>
-        <View style={styles.bigRow}>
-          <AppText variant="display" tabular>{data?.tareasPendientes ?? 0}</AppText>
-          <AppText variant="callout" tone="secondary" style={styles.bigSuffix}>
-            {totalTareas === 0 ? 'nada pendiente' : `pendientes de ${totalTareas}`}
-          </AppText>
-        </View>
-        <AppText variant="callout" tone="secondary" style={{ marginTop: space.sm }}>
-          {totalTareas === 0
-            ? 'Agrega tu primera tarea en la pestaña Tareas.'
-            : data?.tareasPendientes === 0
-              ? 'Todo listo por hoy. Bien ahí 🙌'
-              : 'Vamos de a una, que se puede.'}
-        </AppText>
-      </Card>
-
-      {/* Fila de dos tarjetas: Gym y Gastos */}
-      <View style={styles.row}>
-        <Card style={styles.half} onPress={() => router.navigate('/gym')} accessibilityLabel="Ver gym">
-          <AppText variant="overline" tone="tertiary">Gym</AppText>
-          <AppText variant="title" style={{ marginTop: space.md }} numberOfLines={1}>
-            {data?.gymHoy ?? 'Descanso'}
-          </AppText>
-          <AppText variant="caption" tone="secondary" style={{ marginTop: space.xs }}>
-            {data?.gymHoy ? 'Te toca hoy' : 'Recupera energía'}
-          </AppText>
-        </Card>
-
-        <Card style={styles.half} onPress={() => router.navigate('/gastos')} accessibilityLabel="Ver gastos">
-          <AppText variant="overline" tone="tertiary">Semana</AppText>
-          <AppText variant="title" tabular style={{ marginTop: space.md }} numberOfLines={1} adjustsFontSizeToFit>
-            {formatCLP(data?.gastoSemana ?? 0)}
-          </AppText>
-          <View style={{ marginTop: space.md }}>
-            <ProgressBar value={data?.gastoSemana ?? 0} max={data?.presupuestoSemana ?? 0} />
+    <View style={{ flex: 1 }}>
+      <Screen
+        eyebrow={fechaLarga(ahora)}
+        title={titulo}
+        right={
+          <View style={styles.headerBtns}>
+            <IconButton icon="trophy-outline" accessibilityLabel="Ver medallas" onPress={() => router.push('/logros')} />
+            <IconButton icon="settings-outline" accessibilityLabel="Abrir ajustes" onPress={() => router.push('/ajustes')} />
           </View>
-          <AppText variant="caption" tone="secondary" style={{ marginTop: space.sm }} numberOfLines={1}>
-            de {formatCLP(data?.presupuestoSemana ?? 0)}
+        }
+      >
+        {/* Recordatorio semanal de respaldo */}
+        {pedirRespaldo ? (
+          <Card
+            onPress={() => router.push('/ajustes')}
+            accessibilityLabel="Hacer respaldo"
+            style={[styles.banner, { backgroundColor: colors.warningSoft, borderColor: 'transparent' }]}
+          >
+            <Ionicons name="cloud-upload-outline" size={20} color={colors.warning} />
+            <AppText variant="callout" style={{ flex: 1 }}>
+              Hace rato que no respaldas tus datos. Tócame y lo hacemos en 10 segundos.
+            </AppText>
+          </Card>
+        ) : null}
+  
+        {/* Tareas de hoy: la tarjeta principal */}
+        <Card onPress={() => router.navigate('/tareas')} accessibilityLabel="Ver tareas de hoy">
+          <View style={styles.cardTop}>
+            <AppText variant="overline" tone="tertiary">Tareas de hoy</AppText>
+            <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+          </View>
+          <View style={styles.bigRow}>
+            <AppText variant="display" tabular>{data?.tareasPendientes ?? 0}</AppText>
+            <AppText variant="callout" tone="secondary" style={styles.bigSuffix}>
+              {totalTareas === 0 ? 'nada pendiente' : `pendientes de ${totalTareas}`}
+            </AppText>
+          </View>
+          <AppText variant="callout" tone="secondary" style={{ marginTop: space.sm }}>
+            {totalTareas === 0
+              ? 'Agrega tu primera tarea en la pestaña Tareas.'
+              : data?.tareasPendientes === 0
+                ? 'Todo listo por hoy. Bien ahí 🙌'
+                : 'Vamos de a una, que se puede.'}
           </AppText>
         </Card>
-      </View>
-
-      {/* Acceso a estadísticas del mes */}
-      <Card
-        onPress={() => router.push('/estadisticas')}
-        accessibilityLabel="Ver estadísticas del mes"
-        style={[styles.banner, { marginTop: space.md, marginBottom: 0 }]}
-      >
-        <Ionicons name="stats-chart-outline" size={20} color={colors.accent} />
-        <AppText variant="callout" style={{ flex: 1 }}>Tu mes en números</AppText>
-        <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
-      </Card>
-
-      {/* Hábitos del día */}
-      <View style={{ marginTop: space.xxl }}>
-        <HabitosHoy
-          habitos={habitos}
-          onToggle={async (h) => {
-            setHabitos((hs) => hs.map((x) => (x.id === h.id ? { ...x, hechoHoy: !x.hechoHoy } : x)));
-            await alternarHabito(db, h.id, !h.hechoHoy);
-            setHabitos(await listarHabitos(db));
-            revisar();
-          }}
-        />
-      </View>
-
-      {/* Accesos directos a tus apps */}
-      {Platform.OS === 'android' && apps.length > 0 ? (
-        <View style={{ marginTop: space.xxl }}>
-          <QuickApps apps={apps} />
+  
+        {/* Fila de dos tarjetas: Gym y Gastos */}
+        <View style={styles.row}>
+          <Card style={styles.half} onPress={() => router.navigate('/gym')} accessibilityLabel="Ver gym">
+            <AppText variant="overline" tone="tertiary">Gym</AppText>
+            <AppText variant="title" style={{ marginTop: space.md }} numberOfLines={1}>
+              {data?.gymHoy ?? 'Descanso'}
+            </AppText>
+            <AppText variant="caption" tone="secondary" style={{ marginTop: space.xs }}>
+              {data?.gymHoy ? 'Te toca hoy' : 'Recupera energía'}
+            </AppText>
+          </Card>
+  
+          <Card style={styles.half} onPress={() => router.navigate('/gastos')} accessibilityLabel="Ver gastos">
+            <AppText variant="overline" tone="tertiary">Semana</AppText>
+            <AppText variant="title" tabular style={{ marginTop: space.md }} numberOfLines={1} adjustsFontSizeToFit>
+              {formatCLP(data?.gastoSemana ?? 0)}
+            </AppText>
+            <View style={{ marginTop: space.md }}>
+              <ProgressBar value={data?.gastoSemana ?? 0} max={data?.presupuestoSemana ?? 0} />
+            </View>
+            <AppText variant="caption" tone="secondary" style={{ marginTop: space.sm }} numberOfLines={1}>
+              de {formatCLP(data?.presupuestoSemana ?? 0)}
+            </AppText>
+          </Card>
         </View>
-      ) : null}
-    </Screen>
+  
+        {/* Acceso a estadísticas del mes */}
+        <Card
+          onPress={() => router.push('/estadisticas')}
+          accessibilityLabel="Ver estadísticas del mes"
+          style={[styles.banner, { marginTop: space.md, marginBottom: 0 }]}
+        >
+          <Ionicons name="stats-chart-outline" size={20} color={colors.accent} />
+          <AppText variant="callout" style={{ flex: 1 }}>Tu mes en números</AppText>
+          <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+        </Card>
+  
+        {/* Hábitos del día */}
+        <View style={{ marginTop: space.xxl }}>
+          <HabitosHoy
+            habitos={habitos}
+            onToggle={async (h) => {
+              setHabitos((hs) => hs.map((x) => (x.id === h.id ? { ...x, hechoHoy: !x.hechoHoy } : x)));
+              await alternarHabito(db, h.id, !h.hechoHoy);
+              setHabitos(await listarHabitos(db));
+              revisar();
+            }}
+          />
+        </View>
+  
+        {/* Accesos directos a tus apps */}
+        {Platform.OS === 'android' && apps.length > 0 ? (
+          <View style={{ marginTop: space.xxl }}>
+            <QuickApps apps={apps} />
+          </View>
+        ) : null}
+      </Screen>
+      {/* Micrófono: habla con el asistente */}
+      <Fab icon="mic" accessibilityLabel="Hablar con Tinzit0" onPress={() => router.push({ pathname: '/asistente', params: { auto: vozDisponible ? '1' : '0' } })} />
+    </View>
   );
 }
 

@@ -175,6 +175,17 @@ const MIGRATIONS: string[] = [
     seen        INTEGER NOT NULL DEFAULT 0
   );
   `,
+
+  // v5 — Historial del asistente de voz.
+  `
+  CREATE TABLE IF NOT EXISTS chat_messages (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    role       TEXT NOT NULL,              -- 'user' | 'bot'
+    text       TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+  INSERT OR IGNORE INTO settings (key, value) VALUES ('escucha_activa', '0'), ('voz_respuesta', '1');
+  `,
 ];
 
 /** Se llama una vez al abrir la app (desde SQLiteProvider en el _layout raíz). */

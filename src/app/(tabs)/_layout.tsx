@@ -29,7 +29,7 @@ export default function TabsLayout() {
 
   return (
     <Tabs
-      screenListeners={{ focus: revisar }}
+      screenListeners={{ focus: () => revisar() }}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: colors.text,

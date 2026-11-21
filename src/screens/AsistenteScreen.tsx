@@ -82,7 +82,7 @@ export function AsistenteScreen() {
         await guardarMensaje(db, 'bot', r.texto);
         setMensajes((m) => [...m, { id: Date.now() + 1, role: 'bot', text: r.texto, created_at: ahora, ruta: r.ruta }]);
         if (vozOn.current && Platform.OS !== 'web') hablar(r.texto).catch(() => {});
-        revisar();
+        revisar(true);
       } finally {
         setPensando(false);
       }

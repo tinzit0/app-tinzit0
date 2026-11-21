@@ -29,7 +29,7 @@ import { radius, space } from '@/theme/tokens';
 import { AppText } from './AppText';
 import { Button } from './Button';
 
-type Ctx = { revisar: () => void };
+type Ctx = { revisar: (forzar?: boolean) => void };
 const LogrosContext = createContext<Ctx>({ revisar: () => {} });
 
 export function useLogros() {
@@ -41,8 +41,13 @@ export function LogrosProvider({ children }: { children: ReactNode }) {
   const [cola, setCola] = useState<Logro[]>([]);
   const revisando = useRef(false);
 
-  const revisar = useCallback(() => {
-    if (revisando.current) return;
+  const ultima = useRef(0);
+
+  const revisar = useCallback((forzar?: boolean) => {
+    // Al cambiar de pantalla: como mucho una revisión cada 4 segundos.
+    // Después de una acción (forzar = true): siempre.
+    if (revisando.current || (forzar !== true && Date.now() - ultima.current < 4000)) return;
+    ultima.current = Date.now();
     revisando.current = true;
     (async () => {
       await evaluarLogros(db);

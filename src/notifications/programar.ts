@@ -81,7 +81,14 @@ export function reprogramarTodo(db: SQLiteDatabase): Promise<void> {
   enCurso = (async () => {
     try {
       if (!(await prepararNotificaciones(false))) return;
-      await Notifications.cancelAllScheduledNotificationsAsync();
+      // Borramos solo los avisos "de agenda". El del temporizador de descanso se respeta
+      // (si no, al salir de la app durante el descanso, la alarma desaparecería).
+      const agendadas = await Notifications.getAllScheduledNotificationsAsync();
+      await Promise.all(
+        agendadas
+          .filter((n) => n.content.data?.tipo !== 'descanso')
+          .map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)),
+      );
 
       const on = async (k: string) => (await getSetting(db, k)) !== '0';
       const nombre = (await getSetting(db, 'nombre')) ?? '';

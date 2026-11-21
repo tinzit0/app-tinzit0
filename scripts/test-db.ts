@@ -120,6 +120,10 @@ async function main() {
   assert.ok(est.actual.gastoTotal >= 7500);
   assert.equal(est.actual.habitos.length, 1);
 
+  // Una tarea diaria creada hoy no aparece en días anteriores
+  const ayer = toISODate(new Date(Date.now() - 86400000));
+  assert.equal((await tareas.tareasDelDia(db, ayer)).filter((t) => t.title === 'Agua').length, 0);
+
   // Widget
   const w = await datosWidget(db);
   assert.equal(w.pendientes, 0);

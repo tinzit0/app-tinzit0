@@ -147,7 +147,7 @@ export function HoyScreen() {
               setHabitos((hs) => hs.map((x) => (x.id === h.id ? { ...x, hechoHoy: !x.hechoHoy } : x)));
               await alternarHabito(db, h.id, !h.hechoHoy);
               setHabitos(await listarHabitos(db));
-              revisar();
+              revisar(true);
             }}
           />
         </View>

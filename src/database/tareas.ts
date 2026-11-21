@@ -93,7 +93,8 @@ export async function tareasDelDia(db: SQLiteDatabase, fechaISO: string): Promis
       atrasada: !!t.due_date && t.due_date < fechaISO && t.done === 0,
     })),
     ...repetitivas
-      .filter((t) => tocaEnFecha(t, fecha))
+      // Una tarea repetitiva solo existe desde el día en que la creaste.
+      .filter((t) => t.created_at.slice(0, 10) <= fechaISO && tocaEnFecha(t, fecha))
       .map((t) => ({ ...t, hecha: hechasSet.has(t.id), atrasada: false })),
   ];
   return lista.sort(ordenar);

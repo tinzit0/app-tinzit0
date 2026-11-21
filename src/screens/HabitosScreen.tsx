@@ -47,7 +47,7 @@ export function HabitosScreen() {
     if (!h.hechoHoy) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     await alternarHabito(db, h.id, !h.hechoHoy);
     await cargar();
-    revisar();
+    revisar(true);
   };
 
   return (

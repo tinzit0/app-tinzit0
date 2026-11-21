@@ -57,7 +57,7 @@ export const RestTimer = forwardRef<RestTimerHandle, Props>(function RestTimer({
     progreso.set(withTiming(0, { duration: dur * 1000, easing: Easing.linear }));
     if (Platform.OS !== 'web') {
       Notifications.scheduleNotificationAsync({
-        content: { title: 'Descanso listo ⏱️', body: 'A la siguiente serie, tú puedes 💪', sound: true },
+        content: { title: 'Descanso listo ⏱️', body: 'A la siguiente serie, tú puedes 💪', sound: true, data: { tipo: 'descanso' } },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: dur, channelId: 'tinzit0' },
       })
         .then((id) => (notifId.current = id))

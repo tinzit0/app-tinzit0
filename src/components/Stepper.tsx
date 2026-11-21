@@ -4,6 +4,7 @@
  */
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
+import { useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 
 import { useTheme } from '@/theme/ThemeProvider';
@@ -23,8 +24,10 @@ type Props = {
 
 export function Stepper({ label, value, onChange, step = 1, min = 0, decimals, suffix }: Props) {
   const { colors } = useTheme();
+  const [texto, setTexto] = useState<string | null>(null);
 
   const cambiar = (delta: number) => {
+    setTexto(null);
     const nuevo = Math.max(min, Math.round((value + delta) * 100) / 100);
     if (nuevo !== value) Haptics.selectionAsync().catch(() => {});
     onChange(nuevo);
@@ -49,10 +52,15 @@ export function Stepper({ label, value, onChange, step = 1, min = 0, decimals, s
         {boton('remove', -step, `Bajar ${label}`)}
         <View style={styles.valueWrap}>
           <TextInput
-            value={String(value)}
+            // Mientras escribes mostramos tu texto tal cual (así "22." no se vuelve "22").
+            value={texto ?? String(value)}
+            onFocus={() => setTexto(String(value))}
+            onBlur={() => setTexto(null)}
             onChangeText={(t) => {
-              const n = Number(t.replace(',', '.').replace(decimals ? /[^\d.]/g : /\D/g, ''));
-              if (!Number.isNaN(n)) onChange(n);
+              const limpio = t.replace(',', '.').replace(decimals ? /[^\d.]/g : /\D/g, '');
+              setTexto(limpio);
+              const n = Number(limpio);
+              if (limpio !== '' && !Number.isNaN(n)) onChange(Math.max(min, n));
             }}
             keyboardType={decimals ? 'decimal-pad' : 'number-pad'}
             selectTextOnFocus

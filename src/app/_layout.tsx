@@ -68,7 +68,7 @@ function RootStack() {
       <AppLifecycle />
       <Stack
         // Cada vez que cambias de pantalla revisamos si ganaste alguna medalla.
-        screenListeners={{ focus: revisar }}
+        screenListeners={{ focus: () => revisar() }}
         screenOptions={{
           contentStyle: { backgroundColor: colors.bg },
           headerStyle: { backgroundColor: colors.bg },

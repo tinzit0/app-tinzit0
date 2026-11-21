@@ -7,7 +7,11 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "Tinzit0 convierte tu voz en texto para entender tus comandos.",
+        "NSMicrophoneUsageDescription": "Tinzit0 usa el micrófono para escuchar lo que le pides al asistente."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -17,7 +21,10 @@
         "backgroundColor": "#D6F87A"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.tinzit0.app"
+      "package": "com.tinzit0.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -80,6 +87,17 @@
       ]
     ],
     "scheme": "tinzit0",
-    "backgroundColor": "#0B0B0C"
+    "backgroundColor": "#0B0B0C",
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "44374539-1e9a-4fb7-b0d2-8a7ac00e837c"
+      }
+    },
+    "owner": "tinzit0"
   }
 }

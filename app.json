@@ -14,7 +14,7 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "monochromeImage": "./assets/android-icon-monochrome.png",
-        "backgroundColor": "#0B0B0C"
+        "backgroundColor": "#D6F87A"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.tinzit0.app"
@@ -48,10 +48,10 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 132,
           "resizeMode": "contain",
-          "backgroundColor": "#0B0B0C",
+          "backgroundColor": "#CFF56B",
           "dark": {
             "image": "./assets/splash-icon.png",
-            "backgroundColor": "#0B0B0C"
+            "backgroundColor": "#CFF56B"
           }
         }
       ],

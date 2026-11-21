@@ -80,21 +80,70 @@ type Opciones = {
   onError?: (codigo: string) => void;
 };
 
-/** Empieza a escuchar. Devuelve cómo detener o cancelar. */
+// Los eventos del reconocedor son globales: si quedara un "oyente" de una escucha
+// anterior, también recibiría tus palabras. Cada escucha tiene un número y los
+// oyentes viejos ignoran todo lo que no sea suyo.
+let sesionActual = 0;
+
+/**
+ * Empieza a escuchar. Devuelve cómo detener o cancelar.
+ *
+ * IMPORTANTE (Samsung y otros Android): a veces el reconocedor muestra la
+ * transcripción parcial pero termina sin entregar el "resultado final"
+ * (llega "sin coincidencias" o un error). Para no perder lo que dijiste,
+ * guardamos el último parcial y, si al terminar no hubo final, lo usamos como final.
+ */
 export function escuchar(op: Opciones): Escucha | null {
   if (!mod) return null;
   const M = mod.ExpoSpeechRecognitionModule;
+  const id = ++sesionActual;
+  const mia = () => id === sesionActual;
+  let ultimoParcial = '';
+  let finalEntregado = false;
+  let terminado = false;
+
+  const entregarFinal = (texto: string) => {
+    if (finalEntregado || !texto.trim()) return;
+    finalEntregado = true;
+    op.onFinal?.(texto.trim());
+  };
+
+  const terminar = () => {
+    if (terminado) return;
+    terminado = true;
+    subs.forEach((s) => s.remove());
+    // Si nunca llegó el final pero sí escuchamos algo, lo usamos.
+    if (!finalEntregado && ultimoParcial.trim() && !cancelado) entregarFinal(ultimoParcial);
+    op.onFin?.();
+  };
+
+  let cancelado = false;
   const subs: Sub[] = [
     M.addListener('result', (e) => {
+      if (!mia()) return;
       const texto = e.results[0]?.transcript ?? '';
-      if (e.isFinal) op.onFinal?.(texto);
-      else op.onParcial?.(texto);
+      if (e.isFinal) {
+        // En modo continuo puede haber varios finales (uno por frase).
+        if (op.continuo) op.onFinal?.(texto);
+        else entregarFinal(texto || ultimoParcial);
+      } else if (texto) {
+        ultimoParcial = texto;
+        op.onParcial?.(texto);
+      }
     }),
-    M.addListener('volumechange', (e) => op.onVolumen?.(e.value)),
-    M.addListener('error', (e) => op.onError?.(e.error)),
+    M.addListener('volumechange', (e) => mia() && op.onVolumen?.(e.value)),
+    M.addListener('error', (e) => {
+      if (!mia()) return;
+      // "Sin coincidencias" con algo ya transcrito no es un error para nosotros.
+      if ((e.error === 'no-speech' || e.error === 'speech-timeout') && ultimoParcial.trim()) return;
+      if (e.error !== 'aborted') op.onError?.(e.error);
+    }),
     M.addListener('end', () => {
-      subs.forEach((s) => s.remove());
-      op.onFin?.();
+      if (!mia()) {
+        subs.forEach((s) => s.remove());
+        return;
+      }
+      terminar();
     }),
   ];
 
@@ -112,7 +161,14 @@ export function escuchar(op: Opciones): Escucha | null {
   });
 
   return {
-    detener: () => M.stop(),
-    cancelar: () => M.abort(),
+    detener: () => {
+      M.stop();
+      // Si Android no responde al detener, entregamos lo escuchado igual tras 2,5 s.
+      setTimeout(() => mia() && !terminado && terminar(), 2500);
+    },
+    cancelar: () => {
+      cancelado = true;
+      M.abort();
+    },
   };
 }

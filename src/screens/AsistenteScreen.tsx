@@ -194,6 +194,8 @@ export function AsistenteScreen() {
       }
       setUltimaPregunta(limpio);
       setEstado('pensando');
+      setRespuesta('');
+      try {
       await guardarMensaje(db, 'user', limpio);
 
       let base = await responder(
@@ -206,7 +208,12 @@ export function AsistenteScreen() {
       // descargada, le preguntamos a ella. Si responde, no hace falta el "¿Quisiste decir…?".
       if (base.intencion === 'desconocido' && (await iaActivada(db))) {
         try {
-          base = await preguntarIA(db, limpio, (c) => responder(db, c, {}, { bateria: bateria.current }));
+          setRespuesta('Pensando…');
+          // Máximo 60 s (incluye cargar el modelo la primera vez); si no, respuesta normal.
+          base = await Promise.race([
+            preguntarIA(db, limpio, (c) => responder(db, c, {}, { bateria: bateria.current })),
+            new Promise<never>((_, rej) => setTimeout(() => rej(new Error('ia-tiempo')), 60_000)),
+          ]);
         } catch (e) {
           console.warn('IA no respondió', e);
         }
@@ -230,19 +237,40 @@ export function AsistenteScreen() {
         setEfecto({ tipo: 'pulse', id: Date.now() });
       }
       if (r.hud?.efecto) setEfecto({ tipo: r.hud.efecto, id: Date.now() });
-      if (r.accion) ejecutarAccion(r.accion, router, { setTema: setPreference }).catch(console.warn);
+      // Acciones: algunas cambian lo que hay que decir (qué canción suena, "falta Premium"…)
+      let decir = r.texto;
+      if (r.accion) {
+        const cambio = await ejecutarAccion(r.accion, router, { setTema: setPreference }).catch((e) => {
+          console.warn(e);
+          return undefined;
+        });
+        if (cambio) {
+          decir = aplicarEstilo({ texto: cambio, intencion: r.intencion }, prefs.current.estilo, prefs.current.trato).texto;
+          setRespuesta(decir);
+          guardarMensaje(db, 'bot', decir).catch(() => {});
+        }
+      }
       revisar(true);
 
       // Hablar y, en modo conversación, volver a escuchar
       if (prefs.current.voz && Platform.OS !== 'web') {
         setEstado('hablando');
-        await hablar(r.texto);
+        await hablar(decir);
       }
       if (!montado.current) return;
       const seguir = prefs.current.conversacion && !r.fin && !r.accion && vozDisponible && r.intencion !== 'gracias';
       setEstado('reposo');
       // Pausa breve: así el micrófono no capta el final de su propia voz.
       if (seguir) setTimeout(() => montado.current && empezar().catch(console.warn), 450);
+      } catch (e) {
+        // Nunca quedarse callado: si algo falla, lo decimos.
+        console.warn('Error al responder', e);
+        if (!montado.current) return;
+        const msg = 'Tuve un problema al procesar eso. Inténtalo de nuevo, por favor.';
+        setRespuesta(msg);
+        setEstado('reposo');
+        guardarMensaje(db, 'bot', `${msg} (${e instanceof Error ? e.message : String(e)})`).catch(() => {});
+      }
     },
     [db, empezar, revisar, router, setPreference],
   );

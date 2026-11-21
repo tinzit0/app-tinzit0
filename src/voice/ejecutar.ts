@@ -44,10 +44,12 @@ import {
 import { CATALOGO_APPS } from '@/utils/apps';
 import { categoria } from '@/utils/categorias';
 import { fechaLarga, fromISODate, startOfWeek, toISODate } from '@/utils/fechas';
+import { ENLACES } from '@/utils/enlaces';
 import { formatCLP } from '@/utils/moneda';
 import type { CambioHud, Panel } from '@/jarvis/paneles';
 import { panelPara } from '@/jarvis/panelesDatos';
 import { aprender, buscarAprendido, olvidar, sugerir, type Sugerencia } from './aprender';
+import { musicaPorDescarte } from './reglasApps';
 import { EJEMPLOS, interpretar, type Contexto, type Intencion } from './interpretar';
 import { normalizar, parecido, sinActivacion } from './texto';
 
@@ -55,7 +57,11 @@ export type Accion =
   | { tipo: 'navegar'; ruta: string }
   | { tipo: 'abrir_app'; pkg: string; nombre: string }
   | { tipo: 'recordatorio'; texto: string; segundos: number }
-  | { tipo: 'tema'; tema: 'claro' | 'oscuro' | 'sistema' };
+  | { tipo: 'tema'; tema: 'claro' | 'oscuro' | 'sistema' }
+  | { tipo: 'url'; url: string; respaldo?: string }
+  | { tipo: 'musica'; consulta: string }
+  | { tipo: 'musica_control'; accion: 'pausa' | 'continuar' | 'siguiente' | 'anterior' }
+  | { tipo: 'musica_sonando' };
 
 export type Respuesta = {
   texto: string;
@@ -117,6 +123,7 @@ const PANTALLAS: [RegExp, string][] = [
   [/^rutina/, '/rutina'],
   [/^(peso|cuerpo|medidas)/, '/cuerpo'],
   [/^(apps|aplicaciones)/, '/apps'],
+  [/^(musica|reproductor|mi musica)/, '/musica'],
 ];
 
 export async function responder(db: SQLiteDatabase, frase: string, contexto: Contexto = {}, sistema: Sistema = {}): Promise<Respuesta> {
@@ -164,8 +171,12 @@ export async function responder(db: SQLiteDatabase, frase: string, contexto: Con
   let i: Intencion = i0;
   if (i.tipo === 'desconocido') {
     const sugs = sugerir(frase, 3);
+    const musica = musicaPorDescarte(t);
     if (sugs[0] && sugs[0].puntaje >= 0.6) {
       i = interpretar(sugs[0].comando, new Date(), contexto);
+    } else if (musica) {
+      // "pon X" sin otra pista: lo tomamos como música.
+      i = musica;
     } else if (sugs.length) {
       return {
         texto: `No estoy seguro de haberte entendido. ¿Quisiste decir: ${sugs.map((s, k) => `${k + 1}) ${s.etiqueta.toLowerCase()}`).join(', ')}? Toca una opción o dime "la primera".`,
@@ -683,6 +694,35 @@ export async function ejecutar(db: SQLiteDatabase, i: Intencion, sistema: Sistem
     case 'olvidar':
       // Se resuelven en responder() (necesitan revisar lo aprendido).
       return { texto: 'Listo.' };
+
+    case 'musica_reproducir':
+      return { texto: `Poniendo ${i.consulta} en Spotify.`, accion: { tipo: 'musica', consulta: i.consulta } };
+
+    case 'musica_control': {
+      const txt = { pausa: 'Pausando la música.', continuar: 'Reanudando la música.', siguiente: 'Siguiente canción.', anterior: 'Canción anterior.' }[i.accion];
+      return { texto: txt, accion: { tipo: 'musica_control', accion: i.accion } };
+    }
+
+    case 'musica_sonando':
+      return { texto: 'Déjame revisar qué está sonando…', accion: { tipo: 'musica_sonando' } };
+
+    case 'app_accion': {
+      switch (i.accion) {
+        case 'youtube':
+          return { texto: `Buscando "${i.texto}" en YouTube.`, accion: { tipo: 'url', url: ENLACES.youtube(i.texto) } };
+        case 'google':
+          return { texto: `Buscando "${i.texto}" en Google.`, accion: { tipo: 'url', url: ENLACES.google(i.texto) } };
+        case 'navegar':
+          return { texto: `Abriendo la ruta a ${i.texto} en Maps.`, accion: { tipo: 'url', url: ENLACES.navegar(i.texto), respaldo: ENLACES.navegarWeb(i.texto) } };
+        case 'mapa':
+          return { texto: `Buscando ${i.texto} en el mapa.`, accion: { tipo: 'url', url: ENLACES.mapa(i.texto), respaldo: ENLACES.mapaWeb(i.texto) } };
+        case 'whatsapp':
+          return { texto: `Abriendo WhatsApp con tu mensaje. Elige a quién mandarlo.`, accion: { tipo: 'url', url: ENLACES.whatsapp(i.texto), respaldo: ENLACES.whatsappWeb(i.texto) } };
+        case 'llamar':
+          return { texto: `Llamando al ${i.texto}.`, accion: { tipo: 'url', url: ENLACES.llamar(i.texto) } };
+      }
+      return { texto: 'No sé hacer eso todavía.' };
+    }
 
     case 'tema_hud': {
       const nombres: Record<string, string> = {

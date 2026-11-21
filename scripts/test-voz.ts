@@ -282,3 +282,44 @@ import { leerLlamadas } from '../src/ia/parser';
   console.log(okIA ? '✅ Lector de herramientas de la IA' : `❌ Lector IA: ${JSON.stringify([a, b, c])}`);
   if (!okIA) process.exitCode = 1;
 }
+
+// ---------- Música y acciones dentro de otras apps ----------
+(async () => {
+  const { interpretar: interp } = await import('../src/voice/interpretar');
+  const { responder: resp } = await import('../src/voice/ejecutar');
+  const { crearDbPrueba: crear } = await import('./db-prueba');
+  const casos: [string, string, Record<string, unknown>?][] = [
+    ['pon bad bunny en spotify', 'musica_reproducir', { consulta: 'bad bunny' }],
+    ['reproduce música para entrenar', 'musica_reproducir', { consulta: 'musica para entrenar' }],
+    ['ponme la playlist de rock', 'musica_reproducir', { consulta: 'de rock' }],
+    ['pausa la música', 'musica_control', { accion: 'pausa' }],
+    ['siguiente canción', 'musica_control', { accion: 'siguiente' }],
+    ['canción anterior', 'musica_control', { accion: 'anterior' }],
+    ['qué canción está sonando', 'musica_sonando'],
+    ['busca recetas de pan en youtube', 'app_accion', { accion: 'youtube', texto: 'recetas de pan' }],
+    ['busca en google cuánto mide el everest', 'app_accion', { accion: 'google' }],
+    ['llévame al mall plaza trébol', 'app_accion', { accion: 'navegar', texto: 'mall plaza trebol' }],
+    ['dónde queda la universidad de concepción', 'app_accion', { accion: 'mapa' }],
+    ['manda un whatsapp que diga voy en camino', 'app_accion', { accion: 'whatsapp', texto: 'voy en camino' }],
+    ['llama al 912345678', 'app_accion', { accion: 'llamar', texto: '912345678' }],
+    ['llévame a mis gastos', 'abrir'],
+    ['pon un temporizador de 60 segundos', 'temporizador'],
+    ['ponte rojo', 'tema_hud'],
+  ];
+  let ok = 0;
+  for (const [f, tipo, campos] of casos) {
+    const r = interp(f) as Record<string, unknown>;
+    if (r.tipo === tipo && Object.entries(campos ?? {}).every(([k, v]) => r[k] === v)) ok++;
+    else console.error('❌ apps', f, '→', JSON.stringify(r));
+  }
+  const db = await crear();
+  const a = await resp(db, 'pon los prisioneros');
+  if (a.accion?.tipo === 'musica') ok++; else console.error('❌ pon X por descarte', a);
+  const b = await resp(db, 'ponme al tanto');
+  if (b.intencion === 'resumen') ok++; else console.error('❌ ponme al tanto', b.intencion);
+  const c = await resp(db, 'busca recetas de pan en youtube');
+  if (c.accion?.tipo === 'url' && c.accion.url.includes('youtube.com/results?search_query=recetas')) ok++; else console.error('❌ url youtube', c.accion);
+  const total = casos.length + 3;
+  console.log(ok === total ? `✅ Música y apps: ${ok}/${total}` : `⚠️ Música y apps: ${ok}/${total}`);
+  if (ok !== total) process.exitCode = 1;
+})();

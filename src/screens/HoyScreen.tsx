@@ -155,7 +155,14 @@ export function HoyScreen() {
           <AppText variant="callout" style={{ flex: 1 }}>Tu mes en números</AppText>
           <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
         </Card>
-  
+
+        {/* Música (Spotify) */}
+        <Card onPress={() => router.push('/musica')} accessibilityLabel="Música" style={[styles.banner, { marginTop: space.sm, marginBottom: 0 }]}>
+          <Ionicons name="musical-notes-outline" size={20} color={colors.accent} />
+          <AppText variant="callout" style={{ flex: 1 }}>Música</AppText>
+          <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+        </Card>
+
         {/* Hábitos del día */}
         <View style={{ marginTop: space.xxl }}>
           <HabitosHoy

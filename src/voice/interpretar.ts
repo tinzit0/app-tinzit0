@@ -13,6 +13,7 @@
  */
 import { endOfWeek, toISODate, weekdayMonFirst } from '@/utils/fechas';
 import { parseMonto } from '@/utils/montos';
+import { reglasApps, type IntencionApps } from './reglasApps';
 import { reglasExtra, type IntencionExtra } from './reglasExtra';
 import { normalizar, sinActivacion } from './texto';
 
@@ -66,6 +67,7 @@ export type Intencion =
   | { tipo: 'estado_sistema' }
   | { tipo: 'fin_conversacion' }
   | IntencionExtra
+  | IntencionApps
   | { tipo: 'desconocido'; texto: string };
 
 export type ColorHud = 'cian' | 'rojo' | 'azul' | 'verde' | 'morado' | 'naranjo' | 'dorado' | 'blanco' | 'rosado' | 'lima' | 'defecto';
@@ -402,6 +404,7 @@ export function interpretar(frase: string, hoy = new Date(), contexto: Contexto 
 
   const porRegla =
     reglasExtra(t) ??
+    reglasApps(t) ??
     reglaHud(t) ??
     reglaRecordatorio(t, hoy) ??
     reglaAbrir(t) ??

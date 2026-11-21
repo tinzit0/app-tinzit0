@@ -13,6 +13,7 @@ import { NotifSettings } from '@/components/NotifSettings';
 import { AsistenteSettings } from '@/components/AsistenteSettings';
 import { ClimaSettings } from '@/components/ClimaSettings';
 import { IaSettings } from '@/components/IaSettings';
+import { SpotifySettings } from '@/components/SpotifySettings';
 import { SegmentedControl } from '@/components/SegmentedControl';
 import { getSetting, setSetting } from '@/database/queries';
 import { elegirRespaldo, exportarRespaldo, restaurarRespaldo } from '@/database/respaldo';
@@ -125,6 +126,10 @@ export function AjustesScreen() {
 
       <Section title="Cerebro de IA (gratis)">
         <IaSettings />
+      </Section>
+
+      <Section title="Música (Spotify)">
+        <SpotifySettings />
       </Section>
 
       <Section title="Clima">

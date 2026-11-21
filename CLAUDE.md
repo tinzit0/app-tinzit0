@@ -58,6 +58,9 @@ src/ia/                  IA DENTRO DEL CELULAR (gratis): modelo.ts (react-native
                          Una sola herramienta "ejecutar_comando" → pasa por el intérprete de siempre.
 src/voice/reglasExtra.ts  ayuda "¿cómo hago…?", fijos, estadísticas, medallas, récords, rutina por día, tema, temporizador, enseñar/olvidar
 src/voice/similitud.ts + corpus.ts + aprender.ts   entender por parecido y aprender (tabla voice_learned, migración v6)
+src/spotify/spotify.ts   Spotify gratis: sin cuenta → intent MEDIA_PLAY_FROM_SEARCH; con Client ID del usuario (PKCE, expo-auth-session,
+                         tokens en SecureStore) → qué suena, buscar, playlists; control solo Premium (si no, abre en Spotify)
+src/voice/reglasApps.ts   música (pon/pausa/siguiente/qué suena) y acciones en otras apps (YouTube, Google, Maps, WhatsApp, llamar) → utils/enlaces.ts
 src/clima/clima.ts       Open-Meteo (sin key), caché 30 min en settings, Concepción por defecto
 src/widget/              datos.ts, ResumenWidget.tsx, lib.ts (carga segura), index.tsx
 src/theme/               tokens.ts, ThemeProvider.tsx (sistema/claro/oscuro)
@@ -79,6 +82,7 @@ docs/propuestas-icono.png  3 estilos de ícono (por defecto: 1 "Grafito + Lima")
 - Nueva intención del asistente: agregarla en `interpretar.ts` + `ejecutar.ts` + un caso en `scripts/test-voz.ts`.
 - Cerebro del asistente en 3 capas: aprendido → reglas → parecido (≥0.6) → IA en el celular (si está descargada y activa) → "¿Quisiste decir…?". Nunca servicios de pago.
 - react-native-executorch: config `"react-native-executorch": {"features": ["llm"]}` y `allowScripts` en package.json (su postinstall descarga libs nativas); minSdk 26 vía expo-build-properties.
+- Reconocimiento de voz: si Android no entrega resultado final, se usa el último parcial (reconocedor.ts). No quitar: era el bug "transcribe pero no responde".
 - Notificaciones con `data.tipo` `descanso` o `recordatorio` no se borran al reprogramar.
 - Correr `npx tsc --noEmit` y `npm test` antes de cada commit. Revisar UI con Playwright en 375 px (modo claro y oscuro).
 

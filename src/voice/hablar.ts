@@ -55,14 +55,21 @@ export async function hablar(texto: string): Promise<void> {
   const v = await elegirVoz();
   await Speech.stop();
   return new Promise((resolve) => {
+    // Seguro: algunos motores de voz no avisan cuando terminan. Calculamos un
+    // tiempo máximo según el largo del texto para no quedar esperando para siempre.
+    const limite = setTimeout(resolve, 4000 + paraVoz(texto).length * 90);
+    const listo = () => {
+      clearTimeout(limite);
+      resolve();
+    };
     Speech.speak(paraVoz(texto), {
       language: v.lang,
       voice: v.id,
       rate: estilo === 'jarvis' ? 0.98 : 1.02,
       pitch: estilo === 'jarvis' ? 0.9 : 1.0,
-      onDone: () => resolve(),
-      onStopped: () => resolve(),
-      onError: () => resolve(),
+      onDone: listo,
+      onStopped: listo,
+      onError: listo,
     });
   });
 }

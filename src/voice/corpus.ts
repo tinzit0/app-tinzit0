@@ -151,6 +151,21 @@ export const CORPUS: GrupoCorpus[] = [
     ejemplos: ['qué hice esta semana', 'balance semanal', 'cómo estuvo la semana', 'resumen semanal'],
   },
   {
+    comando: 'cuánto puedo gastar hoy',
+    etiqueta: 'Cuánto puedes gastar hoy',
+    ejemplos: ['cuánto me queda para hoy', 'me queda plata', 'puedo comprarme algo', 'tengo plata para salir', 'cuánto tengo disponible'],
+  },
+  {
+    comando: 'cómo voy a terminar el mes',
+    etiqueta: 'Cómo terminarías el mes',
+    ejemplos: ['me va a alcanzar la plata', 'llego a fin de mes', 'cuánto voy a gastar en total', 'proyección de gastos'],
+  },
+  {
+    comando: 'revisa los gastos del banco',
+    etiqueta: 'Gastos detectados del banco',
+    ejemplos: ['qué compras detectaste', 'compras de la tarjeta', 'movimientos del banco', 'lo que gasté con la tarjeta'],
+  },
+  {
     comando: 'ayuda',
     etiqueta: 'Qué puedo pedirte',
     ejemplos: ['qué sabes hacer', 'qué haces', 'para qué sirves', 'qué funciones tienes', 'qué puedo decirte', 'cómo te uso'],

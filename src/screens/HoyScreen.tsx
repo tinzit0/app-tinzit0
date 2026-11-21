@@ -25,6 +25,7 @@ import { appsIniciales, listarApps, type AppFavorita } from '@/database/apps';
 import { proximasEvaluaciones, todosLosBloques, type BloqueConRamo, type EvaluacionConRamo } from '@/database/estudio';
 import { claseAhora } from '@/estudio/logica';
 import { getResumenHoy, type ResumenHoy } from '@/database/queries';
+import { obtenerProyeccion } from '@/database/finanzas';
 import { necesitaRespaldo } from '@/database/respaldo';
 import { useTheme } from '@/theme/ThemeProvider';
 import { space } from '@/theme/tokens';
@@ -46,6 +47,7 @@ export function HoyScreen() {
   const [climaCargado, setClimaCargado] = useState(false);
   const [bloques, setBloques] = useState<BloqueConRamo[]>([]);
   const [prueba, setPrueba] = useState<EvaluacionConRamo | null>(null);
+  const [quedaHoy, setQuedaHoy] = useState<number | null>(null);
   const { revisar } = useLogros();
 
   // Cada vez que vuelves a esta pestaña, recargamos los datos.
@@ -61,6 +63,9 @@ export function HoyScreen() {
         })
         .catch(() => setClimaCargado(true));
       todosLosBloques(db).then(setBloques).catch(console.warn);
+      obtenerProyeccion(db)
+        .then((p) => setQuedaHoy(p.quedaHoy))
+        .catch(() => {});
       proximasEvaluaciones(db, 14)
         .then((p) => setPrueba(p.find((e) => e.grade == null) ?? null))
         .catch(console.warn);
@@ -156,8 +161,8 @@ export function HoyScreen() {
             <View style={{ marginTop: space.md }}>
               <ProgressBar value={data?.gastoSemana ?? 0} max={data?.presupuestoSemana ?? 0} />
             </View>
-            <AppText variant="caption" tone="secondary" style={{ marginTop: space.sm }} numberOfLines={1}>
-              de {formatCLP(data?.presupuestoSemana ?? 0)}
+            <AppText variant="caption" tone={quedaHoy != null && quedaHoy < 0 ? 'danger' : 'secondary'} style={{ marginTop: space.sm }} numberOfLines={1}>
+              {quedaHoy != null ? (quedaHoy < 0 ? `Hoy: ${formatCLP(quedaHoy)}` : `Hoy: ${formatCLP(quedaHoy)} libres`) : `de ${formatCLP(data?.presupuestoSemana ?? 0)}`}
             </AppText>
           </Card>
         </View>

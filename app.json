@@ -2,7 +2,7 @@
   "expo": {
     "name": "Tinzit0",
     "slug": "tinzit0",
-    "version": "1.5.0",
+    "version": "1.6.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -87,7 +87,9 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Tinzit0 usa tu ubicación aproximada solo para mostrarte el clima de tu ciudad."
+          "locationWhenInUsePermission": "Tinzit0 usa tu ubicación para mostrarte el clima y, si lo activas, para saber si llegaste a tu U.",
+          "locationAlwaysAndWhenInUsePermission": "Si activas la asistencia automática, Tinzit0 revisa si entras o sales de tu U para marcar tu asistencia. Tu ubicación no sale del celular.",
+          "isAndroidBackgroundLocationEnabled": true
         }
       ],
       [

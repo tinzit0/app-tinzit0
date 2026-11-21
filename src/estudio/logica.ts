@@ -337,3 +337,32 @@ export function buscarRamoPorNombre<T extends { name: string }>(ramos: T[], text
   }
   return mejor && mejor.s >= 0.5 ? mejor.r : null;
 }
+
+// ---------- Asistencia automática por ubicación ----------
+
+export type Visita = { entrada: Date; salida: Date | null };
+
+const enFecha = (dia: Date, hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return new Date(dia.getFullYear(), dia.getMonth(), dia.getDate(), h || 0, m || 0);
+};
+
+/**
+ * Clases de `dia` a las que estuviste, según tus visitas a la U:
+ * - si estuviste dentro al menos `minimo` minutos durante la clase, o
+ * - si llegaste antes de los primeros 15 min de la clase y sigues dentro (la clase ya empezó).
+ */
+export function clasesAsistidas<T extends BloqueClase>(bloques: T[], visitas: Visita[], dia: Date, ahora = new Date(), minimo = 15): T[] {
+  return bloquesDelDia(bloques, dia).filter((b) => {
+    const ini = enFecha(dia, b.start_time).getTime();
+    const fin = enFecha(dia, b.end_time).getTime();
+    if (ahora.getTime() < ini) return false; // aún no empieza
+    return visitas.some((v) => {
+      const e = v.entrada.getTime();
+      const s = (v.salida ?? ahora).getTime();
+      const solape = (Math.min(fin, s) - Math.max(ini, e)) / 60_000;
+      if (solape >= Math.min(minimo, (fin - ini) / 60_000)) return true;
+      return v.salida == null && e <= ini + 15 * 60_000 && ahora.getTime() >= ini;
+    });
+  });
+}

@@ -15,7 +15,7 @@ function plural(n: number, uno: string, varios: string) {
 
 // ---------- Mañana ----------
 
-export function mensajeManana(p: { nombre: string; tareas: number; gym: string | null; clima?: string | null }) {
+export function mensajeManana(p: { nombre: string; tareas: number; gym: string | null; clima?: string | null; gastoDia?: number | null }) {
   const hola = p.nombre ? `Buenos días, ${p.nombre}` : 'Buenos días';
   const titulo = alAzar([`${hola} ☀️`, `${hola}! Arriba ese ánimo ☀️`, `${hola} 👋`]);
 
@@ -31,7 +31,8 @@ export function mensajeManana(p: { nombre: string; tareas: number; gym: string |
   const cierre = alAzar(['¡Vamos con todo!', 'Tú puedes.', 'A darle.']);
   // El clima va primero y en su propia línea: es lo primero que uno quiere saber al despertar.
   const linea = `${partes.join(', ')}. ${cierre}`;
-  return { titulo, cuerpo: p.clima ? `${p.clima}\n${linea}` : linea };
+  const plata = p.gastoDia != null ? `\n💸 Hoy puedes gastar ${formatCLP(p.gastoDia)}` : '';
+  return { titulo, cuerpo: `${p.clima ? `${p.clima}\n` : ''}${linea}${plata}` };
 }
 
 // ---------- Noche ----------
@@ -114,4 +115,8 @@ export function mensajePrueba(p: { nombre: string; ramo: string; manana: boolean
         titulo: `📝 Hoy: ${p.nombre} de ${p.ramo}`,
         cuerpo: alAzar(['Respira, confía en lo que estudiaste. ¡Éxito!', 'Hoy es el día. ¡Mucho éxito! 🍀']),
       };
+}
+
+export function mensajePreguntaAsistencia(p: { ramo: string }) {
+  return { titulo: `¿Fuiste a ${p.ramo}?`, cuerpo: 'No te detecté en la U durante la clase. Toca para anotar tu asistencia.' };
 }

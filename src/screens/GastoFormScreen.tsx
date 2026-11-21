@@ -37,7 +37,7 @@ export function GastoFormScreen() {
   // Vuelve atrás; si no hay pantalla anterior (ej: se abrió por enlace), va al inicio.
   const cerrar = () => (router.canGoBack() ? router.back() : router.replace('/'));
   const { colors } = useTheme();
-  const params = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string; monto?: string; cat?: string; nota?: string; fecha?: string }>();
   const id = params.id ? Number(params.id) : null;
 
   const [digitos, setDigitos] = useState(''); // el monto como texto de solo números
@@ -45,6 +45,15 @@ export function GastoFormScreen() {
   const [nota, setNota] = useState('');
   const [fecha, setFecha] = useState(toISODate());
   const [guardando, setGuardando] = useState(false);
+
+  // Pre-llenado (ej: desde una boleta escaneada)
+  useEffect(() => {
+    if (id) return;
+    if (params.monto && /^\d+$/.test(params.monto)) setDigitos(params.monto);
+    if (params.cat) setCat(params.cat);
+    if (params.nota) setNota(params.nota);
+    if (params.fecha && /^\d{4}-\d{2}-\d{2}$/.test(params.fecha)) setFecha(params.fecha);
+  }, [id, params.monto, params.cat, params.nota, params.fecha]);
 
   useEffect(() => {
     if (!id) return;

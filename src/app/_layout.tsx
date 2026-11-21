@@ -111,6 +111,9 @@ function RootStack() {
         <Stack.Screen name="repaso" options={{ title: 'Repaso' }} />
         <Stack.Screen name="grabar" options={{ title: 'Grabar clase' }} />
         <Stack.Screen name="escanear" options={{ title: 'Escanear apuntes' }} />
+        <Stack.Screen name="gastos-banco" options={{ title: 'Gastos del banco' }} />
+        <Stack.Screen name="boleta" options={{ title: 'Escanear boleta' }} />
+        <Stack.Screen name="campus" options={{ title: 'Asistencia automática' }} />
       </Stack>
     </>
   );

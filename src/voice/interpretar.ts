@@ -15,6 +15,7 @@ import { endOfWeek, toISODate, weekdayMonFirst } from '@/utils/fechas';
 import { parseMonto } from '@/utils/montos';
 import { reglasApps, type IntencionApps } from './reglasApps';
 import { reglasEstudio, type IntencionEstudio } from './reglasEstudio';
+import { reglasFinanzas, type IntencionFinanzas } from './reglasFinanzas';
 import { reglasExtra, type IntencionExtra } from './reglasExtra';
 import { normalizar, sinActivacion } from './texto';
 
@@ -70,6 +71,7 @@ export type Intencion =
   | IntencionExtra
   | IntencionApps
   | IntencionEstudio
+  | IntencionFinanzas
   | { tipo: 'desconocido'; texto: string };
 
 export type ColorHud = 'cian' | 'rojo' | 'azul' | 'verde' | 'morado' | 'naranjo' | 'dorado' | 'blanco' | 'rosado' | 'lima' | 'defecto';
@@ -88,15 +90,15 @@ const DIAS = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'do
 
 /** Palabras que delatan cada categoría de gasto. */
 const CATEGORIAS: Record<string, string[]> = {
-  comida: ['comida', 'almuerzo', 'almorce', 'cena', 'desayuno', 'once', 'super', 'supermercado', 'pan', 'completo', 'sushi', 'pizza', 'cafe', 'colacion', 'feria', 'verduras', 'carne', 'lider', 'jumbo', 'unimarc', 'delivery', 'pedidosya', 'rappi', 'hamburguesa', 'empanada', 'mote', 'comer'],
-  transporte: ['transporte', 'micro', 'metro', 'uber', 'didi', 'cabify', 'taxi', 'colectivo', 'bencina', 'combustible', 'peaje', 'estacionamiento', 'bip', 'pasaje', 'bus', 'biotren'],
-  ocio: ['ocio', 'cine', 'carrete', 'copete', 'cerveza', 'chela', 'chelas', 'bar', 'juego', 'juegos', 'concierto', 'entrada', 'salida', 'videojuego', 'steam', 'regalo'],
+  comida: ['comida', 'almuerzo', 'almorce', 'cena', 'desayuno', 'once', 'super', 'supermercado', 'pan', 'completo', 'sushi', 'pizza', 'cafe', 'colacion', 'feria', 'verduras', 'carne', 'lider', 'jumbo', 'unimarc', 'delivery', 'pedidosya', 'rappi', 'hamburguesa', 'empanada', 'mote', 'comer', 'tottus', 'santa isabel', 'acuenta', 'mayorista', 'ok market', 'oxxo', 'mcdonalds', 'burger king', 'starbucks', 'dominos', 'kfc', 'subway', 'doggis', 'juan maestro', 'telepizza', 'restaurant', 'restaurante', 'panaderia', 'minimarket', 'botilleria', 'uber eats', 'justo'],
+  transporte: ['transporte', 'micro', 'metro', 'uber', 'didi', 'cabify', 'taxi', 'colectivo', 'bencina', 'combustible', 'peaje', 'estacionamiento', 'bip', 'pasaje', 'bus', 'biotren', 'copec', 'shell', 'aramco', 'petrobras', 'enex', 'turbus', 'pullman', 'latam', 'sky airline', 'jetsmart', 'autopista', 'tag'],
+  ocio: ['ocio', 'cine', 'carrete', 'copete', 'cerveza', 'chela', 'chelas', 'bar', 'juego', 'juegos', 'concierto', 'entrada', 'salida', 'videojuego', 'steam', 'regalo', 'cinemark', 'cineplanet', 'ticketmaster', 'puntoticket', 'passline', 'zara', 'aliexpress', 'temu', 'shein', 'mercadolibre'],
   hogar: ['hogar', 'casa', 'arriendo', 'luz', 'agua', 'gas', 'internet', 'aseo', 'limpieza', 'mueble', 'gastos comunes', 'ferreteria'],
-  salud: ['salud', 'farmacia', 'remedio', 'remedios', 'doctor', 'medico', 'consulta', 'dentista', 'examen', 'isapre', 'fonasa', 'gimnasio', 'proteina'],
-  suscripciones: ['suscripcion', 'suscripciones', 'netflix', 'spotify', 'youtube premium', 'disney', 'hbo', 'max', 'icloud', 'plan', 'celular', 'prime', 'chatgpt', 'claude'],
+  salud: ['salud', 'farmacia', 'remedio', 'remedios', 'doctor', 'medico', 'consulta', 'dentista', 'examen', 'isapre', 'fonasa', 'gimnasio', 'proteina', 'cruz verde', 'salcobrand', 'ahumada', 'dr simi', 'clinica', 'smartfit', 'pacific'],
+  suscripciones: ['suscripcion', 'suscripciones', 'netflix', 'spotify', 'youtube premium', 'disney', 'hbo', 'max', 'icloud', 'plan', 'celular', 'prime', 'chatgpt', 'claude', 'netflix com', 'google', 'apple com', 'entel', 'movistar', 'wom', 'claro', 'vtr', 'crunchyroll', 'paramount', 'playstation', 'xbox'],
 };
 
-function detectarCategoria(t: string): string {
+export function detectarCategoria(t: string): string {
   for (const [cat, palabras] of Object.entries(CATEGORIAS)) {
     if (palabras.some((p) => new RegExp(`\\b${p}\\b`).test(t))) return cat;
   }
@@ -405,6 +407,7 @@ export function interpretar(frase: string, hoy = new Date(), contexto: Contexto 
   }
 
   const porRegla =
+    reglasFinanzas(t) ??
     reglasEstudio(t, hoy, detectarFecha) ??
     reglasExtra(t) ??
     reglasApps(t) ??

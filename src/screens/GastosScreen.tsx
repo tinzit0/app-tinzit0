@@ -4,6 +4,8 @@
  * - Presupuesto semanal con barra y aviso
  * - Gasto por categoría
  * - Lista de movimientos agrupada por día
+ * - "Hoy puedes gastar" y cómo terminarías el mes
+ * - Gastos detectados del banco por revisar, y escanear boletas
  */
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -30,6 +32,8 @@ import {
   type Gasto,
 } from '@/database/gastos';
 import { totalFijosMes } from '@/database/fijos';
+import { contarAvisosPendientes, obtenerProyeccion } from '@/database/finanzas';
+import type { Proyeccion } from '@/finanzas/proyeccion';
 import { listarMetas } from '@/database/metas';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, space } from '@/theme/tokens';
@@ -55,6 +59,8 @@ export function GastosScreen() {
   const [datos, setDatos] = useState<Datos | null>(null);
   const [fijosMes, setFijosMes] = useState(0);
   const [ahorrado, setAhorrado] = useState(0);
+  const [proy, setProy] = useState<Proyeccion | null>(null);
+  const [delBanco, setDelBanco] = useState(0);
 
   const cargar = useCallback(async () => {
     const hoy = new Date();
@@ -74,6 +80,8 @@ export function GastosScreen() {
     setDatos({ total, anterior, presupuesto, totalSemana, porCategoria, gastos });
     setFijosMes(await totalFijosMes(db));
     setAhorrado((await listarMetas(db)).reduce((n, m) => n + m.ahorrado, 0));
+    setProy(await obtenerProyeccion(db));
+    setDelBanco(await contarAvisosPendientes(db));
   }, [db, periodo]);
 
   useFocusEffect(
@@ -128,6 +136,55 @@ export function GastosScreen() {
           ) : null}
         </View>
 
+        {/* Gastos detectados del banco por revisar */}
+        {delBanco > 0 ? (
+          <Card
+            onPress={() => router.push('/gastos-banco')}
+            accessibilityLabel={`${delBanco} gastos del banco por revisar`}
+            style={[styles.banner, { backgroundColor: colors.accentSoft, borderColor: 'transparent' }]}
+          >
+            <Ionicons name="notifications-outline" size={20} color={colors.accent} />
+            <AppText variant="callout" style={{ flex: 1 }}>
+              {delBanco === 1 ? '1 gasto del banco por revisar' : `${delBanco} gastos del banco por revisar`}
+            </AppText>
+            <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+          </Card>
+        ) : null}
+
+        {/* Hoy puedes gastar / cómo terminarías el mes */}
+        {proy ? (
+          <Card style={{ marginTop: space.md }}>
+            {proy.quedaHoy != null ? (
+              <>
+                <AppText variant="overline" tone="tertiary">Hoy puedes gastar</AppText>
+                <AppText variant="title" tabular tone={proy.quedaHoy < 0 ? 'danger' : 'primary'} style={{ marginTop: space.xs }}>
+                  {proy.quedaHoy < 0 ? `Te pasaste ${formatCLP(-proy.quedaHoy)}` : formatCLP(proy.quedaHoy)}
+                </AppText>
+                <AppText variant="caption" tone="secondary" style={{ marginTop: 2 }}>
+                  {proy.diasRestantesSemana > 1 ? `≈ ${formatCLP(proy.porDia ?? 0)} por día hasta el domingo` : 'Último día de la semana'}
+                </AppText>
+              </>
+            ) : (
+              <AppText variant="callout" tone="secondary">Pon un presupuesto semanal en Ajustes y te digo cuánto puedes gastar cada día.</AppText>
+            )}
+            <View style={[styles.proyLinea, { borderTopColor: colors.border }]}>
+              <AppText variant="caption" tone="tertiary" style={{ flex: 1 }}>Si sigues así, terminas el mes en</AppText>
+              <AppText variant="callout" tabular tone={proy.estado === 'pasado' ? 'danger' : proy.estado === 'ojo' ? 'warning' : 'primary'}>
+                {formatCLP(proy.finDeMes)}
+              </AppText>
+            </View>
+            {proy.presupuestoMes != null ? (
+              <AppText variant="caption" tone="tertiary" style={{ marginTop: 2 }}>
+                {proy.estado === 'pasado'
+                  ? `Te pasarías de tu presupuesto del mes (${formatCLP(proy.presupuestoMes)}).`
+                  : proy.estado === 'ojo'
+                    ? `Justo en el límite de tu presupuesto (${formatCLP(proy.presupuestoMes)}).`
+                    : `Dentro de tu presupuesto del mes (${formatCLP(proy.presupuestoMes)}).`}
+              </AppText>
+            ) : null}
+          </Card>
+        ) : null}
+
         {/* Accesos: gastos fijos y metas de ahorro */}
         <View style={styles.accesos}>
           <Card style={styles.acceso} onPress={() => router.push('/fijos')} accessibilityLabel="Gastos fijos">
@@ -143,6 +200,20 @@ export function GastosScreen() {
             <AppText variant="caption" tone="tertiary" tabular numberOfLines={1}>
               {formatCLP(ahorrado)} ahorrado
             </AppText>
+          </Card>
+        </View>
+        <View style={[styles.accesos, { marginTop: space.md }]}>
+          <Card style={styles.acceso} onPress={() => router.push('/gastos-banco')} accessibilityLabel="Gastos automáticos del banco">
+            <Ionicons name="card-outline" size={20} color={colors.accent} />
+            <AppText variant="callout" style={{ marginTop: space.sm }}>Del banco</AppText>
+            <AppText variant="caption" tone="tertiary" numberOfLines={1}>
+              {delBanco ? `${delBanco} por revisar` : 'Automáticos'}
+            </AppText>
+          </Card>
+          <Card style={styles.acceso} onPress={() => router.push('/boleta')} accessibilityLabel="Escanear boleta">
+            <Ionicons name="receipt-outline" size={20} color={colors.accent} />
+            <AppText variant="callout" style={{ marginTop: space.sm }}>Boleta</AppText>
+            <AppText variant="caption" tone="tertiary" numberOfLines={1}>Sácale foto</AppText>
           </Card>
         </View>
 
@@ -254,6 +325,8 @@ export function GastosScreen() {
 }
 
 const styles = StyleSheet.create({
+  banner: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg, marginTop: space.md },
+  proyLinea: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginTop: space.lg, paddingTop: space.md, borderTopWidth: StyleSheet.hairlineWidth },
   flex: { flex: 1 },
   accesos: { flexDirection: 'row', gap: space.md, marginTop: space.xl },
   acceso: { flex: 1, padding: space.lg },

@@ -268,6 +268,35 @@ const MIGRATIONS: string[] = [
     ('notif_clases', '1'), ('aviso_clase_min', '10'), ('notif_pruebas', '1'),
     ('pomodoro_min', '25'), ('pomodoro_descanso', '5');
   `,
+
+  // v8 — Gastos automáticos desde avisos del banco y visitas a la U (asistencia automática).
+  `
+  CREATE TABLE IF NOT EXISTS bank_alerts (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    pkg        TEXT NOT NULL,
+    title      TEXT NOT NULL DEFAULT '',
+    text       TEXT NOT NULL DEFAULT '',
+    ts         INTEGER NOT NULL,                 -- cuándo llegó el aviso (ms)
+    tipo       TEXT NOT NULL,                    -- 'compra' | 'transferencia' | 'ignorar'
+    monto      INTEGER,
+    comercio   TEXT,
+    categoria  TEXT,
+    estado     TEXT NOT NULL,                    -- 'pendiente' | 'agregado' | 'descartado' | 'ignorado'
+    expense_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    UNIQUE (pkg, ts, text)
+  );
+  CREATE INDEX IF NOT EXISTS idx_bank_estado ON bank_alerts(estado);
+
+  CREATE TABLE IF NOT EXISTS campus_visits (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    enter_at TEXT NOT NULL,                      -- 'YYYY-MM-DDTHH:MM:SS' hora local
+    exit_at  TEXT
+  );
+
+  INSERT OR IGNORE INTO settings (key, value) VALUES
+    ('gastos_auto_modo', 'preguntar'), ('asistencia_auto', '0'), ('campus_radio', '300');
+  `,
 ];
 
 /** Se llama una vez al abrir la app (desde SQLiteProvider en el _layout raíz). */

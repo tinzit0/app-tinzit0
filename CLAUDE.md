@@ -44,7 +44,7 @@ src/components/          UI reutilizable (Card, Chip, Button, Field, Fab, Pressa
                          DonutChart, Heatmap, MicOrb, RestTimer, LockGate, LogrosProvider, AppLifecycle…)
 src/database/            acceso a datos por módulo (tareas, gastos, fijos, metas, gym, cuerpo,
                          habitos, logros, notas, apps, respaldo, estadisticas, queries=settings)
-  schema.ts              MIGRACIONES versionadas con PRAGMA user_version (v1…v5)
+  schema.ts              MIGRACIONES versionadas con PRAGMA user_version (v1…v8)
 src/notifications/       mensajes.ts (personalidad) + programar.ts (agenda 7 días)
 src/voice/               texto.ts (normalizar, "ey Tinzit0"), interpretar.ts (NLU local, puro, ~40 intenciones + contexto),
                          ejecutar.ts (acciones + respuestas + historial; devuelve "accion" para la UI),
@@ -71,6 +71,15 @@ src/voice/reglasEstudio.ts  "cómo voy en X", "me saqué un 5,5 en…", "tengo p
 src/ia/ocr.ts            leer texto de fotos: react-native-executorch/legacy OCRModule + OCR_SPANISH (feature "ocr" en package.json)
 Pantallas de estudio     Estudio, Ramo, RamoForm, EvaluacionForm, Horario, Pomodoro, Tarjetas, Repaso, GrabarClase
                          (dictado continuo + keep-awake + pausa de "ey Tinzit0"), Escanear (expo-image-picker)
+src/finanzas/             banco.ts (entender avisos de compra de bancos chilenos; lista AMPLIA de paquetes, no singularizar),
+                         boleta.ts (total/local/fecha desde OCR), proyeccion.ts ("hoy puedes gastar", fin de mes),
+                         sincronizar.ts (cola nativa → bank_alerts). Probado en scripts/test-finanzas.ts.
+modules/tinzit0-avisos/  MÓDULO NATIVO PROPIO (Kotlin, Expo Modules): NotificationListenerService que guarda SOLO avisos de
+                         apps de bancos en una cola (SharedPreferences); la app la procesa al abrir o en vivo (evento onAviso).
+                         Android 13+ con APK: hay que "Permitir ajustes restringidos" en la info de la app.
+src/estudio/campusTarea.ts  asistencia automática: geocerca (expo-location + expo-task-manager, ubicación "todo el tiempo").
+                         defineTask se importa en index.ts. Visitas en campus_visits; conciliarAsistencia marca "fui".
+                         Pregunta "¿Fuiste a X?" con botones (categoría 'asistencia') al terminar cada clase no detectada.
 src/clima/clima.ts       Open-Meteo (sin key), caché 30 min en settings, Concepción por defecto
 src/widget/              datos.ts, ResumenWidget.tsx, lib.ts (carga segura), index.tsx
 src/theme/               tokens.ts, ThemeProvider.tsx (sistema/claro/oscuro)
@@ -94,7 +103,7 @@ docs/propuestas-icono.png  3 estilos de ícono (por defecto: 1 "Grafito + Lima")
 - react-native-executorch: config `"react-native-executorch": {"features": ["llm"]}` y `allowScripts` en package.json (su postinstall descarga libs nativas); minSdk 26 vía expo-build-properties.
 - Reconocimiento de voz: si Android no entrega resultado final, se usa el último parcial (reconocedor.ts). No quitar: era el bug "transcribe pero no responde".
 - Notificaciones con `data.tipo` `descanso`, `recordatorio` o `pomodoro` no se borran al reprogramar. Los avisos de clase (`notif_clases`) y de pruebas (`notif_pruebas`) se agendan en `reprogramarTodo`.
-- Correr `npx tsc --noEmit` y `npm test` antes de cada commit. Revisar UI con Playwright en 375 px (modo claro y oscuro).
+- Correr `npx tsc --noEmit` y `npm test` antes de cada commit. El módulo nativo solo se valida compilando con EAS. Revisar UI con Playwright en 375 px (modo claro y oscuro).
 
 ## Funciones (estado al 2026-11-21)
 
@@ -107,7 +116,8 @@ Notificaciones (mañana con clima, noche, domingo, pagos fijos; horas configurab
 recordatorio semanal · Bloqueo con huella · Asistente de voz/texto con "ey Tinzit0" (app abierta), ~40 comandos sin internet · Clima (Open-Meteo) · Widget Android ·
 Ícono y splash · Modo Estudiante (ramos, notas chilenas y "cuánto necesito", horario con aviso antes de clase, asistencia,
 pruebas con plan de estudio en Tareas, Pomodoro con lofi, tarjetas con repetición espaciada, grabar clase → texto/resumen,
-escanear apuntes sin internet, resumen semanal por voz).
+escanear apuntes sin internet, resumen semanal por voz) · Gastos automáticos desde avisos del banco · Boletas escaneadas → gasto ·
+"Hoy puedes gastar" y proyección de fin de mes · Asistencia automática por ubicación de la U.
 
 ## Pendiente / ideas
 

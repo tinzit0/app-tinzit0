@@ -25,6 +25,7 @@ import {
   ultimoGasto,
 } from '@/database/gastos';
 import { compararMes } from '@/database/estadisticas';
+import { contarAvisosPendientes, obtenerProyeccion } from '@/database/finanzas';
 import { diaDePagoEn, listarFijos } from '@/database/fijos';
 import {
   buscarRamo,
@@ -698,6 +699,10 @@ export async function ejecutar(db: SQLiteDatabase, i: Intencion, sistema: Sistem
         apps: ['En Hoy, "Tus apps" → Editar, eliges hasta 8 apps para abrirlas de un toque. También puedes decirme "abre WhatsApp".', '/apps'],
         clima: ['El clima aparece en Hoy. Para cambiar la ciudad ve a Ajustes → Clima, o usa tu ubicación.', '/clima'],
         estadisticas: ['En Hoy toca "Tu mes en números", o dime "cómo me fue este mes".', '/estadisticas'],
+        banco: ['En Gastos toca "Del banco" → "Activar gastos automáticos" y activa Tinzit0 en "Acceso a notificaciones". Si Android dice "ajuste restringido": Ajustes → Apps → Tinzit0 → ⋮ → "Permitir ajustes restringidos". Eliges si te pregunto cada compra o las anoto solas.', '/gastos-banco'],
+        boleta: ['En Gastos toca "Boleta" (o dime "escanea una boleta"), sácale una foto y te dejo el gasto listo con el total, el local y la fecha.', '/boleta'],
+        campus: ['En Estudio toca "Asistencia": estando en la U guardas la ubicación y la activas (Android pide ubicación "todo el tiempo"). Marco "fui" cuando estás en la U a la hora de la clase y, si no, te pregunto.', '/campus'],
+        proyeccion: ['En Gastos ves "Hoy puedes gastar" y cómo terminarías el mes a tu ritmo. Necesita un presupuesto semanal (Ajustes → Gastos). También pregúntame "¿cuánto puedo gastar hoy?".', '/gastos'],
         estudio: ['En Hoy toca "Estudio" → "Nuevo ramo". En cada ramo agregas tus evaluaciones con su ponderación y nota (de 1,0 a 7,0) y te digo tu promedio y cuánto necesitas para el 4,0. También puedes decirme "me saqué un 5,5 en la prueba de cálculo" o "tengo prueba de química el viernes" y te armo un plan de estudio.', '/estudio'],
         horario: ['Abre un ramo, toca el lápiz y agrega sus bloques (día y hora). Te aviso 10 minutos antes de cada clase y en Hoy ves la clase de ahora. Pregúntame "qué clase tengo ahora".', '/horario'],
         asistencia: ['En cada ramo toca "Fui hoy" o "Falté hoy", o dime "falté a física". Te muestro el porcentaje y te aviso si quedas bajo el mínimo.', '/estudio'],
@@ -753,6 +758,37 @@ export async function ejecutar(db: SQLiteDatabase, i: Intencion, sistema: Sistem
           return { texto: `Llamando al ${i.texto}.`, accion: { tipo: 'url', url: ENLACES.llamar(i.texto) } };
       }
       return { texto: 'No sé hacer eso todavía.' };
+    }
+
+    // ---------- Plata: cuánto puedo gastar, fin de mes ----------
+    case 'gasto_diario': {
+      const p = await obtenerProyeccion(db);
+      if (p.quedaHoy == null || p.porDia == null) return { texto: 'Aún no tienes presupuesto semanal. Dime "cambia mi presupuesto a 70 lucas" y te digo cuánto puedes gastar cada día.', ruta: '/gastos' };
+      if (p.quedaHoy < 0) return { texto: `Hoy ya te pasaste ${formatCLP(-p.quedaHoy)} de lo que tocaba por día. Si mañana gastas menos, lo compensas.`, ruta: '/gastos' };
+      return {
+        texto: `Hoy puedes gastar ${formatCLP(p.quedaHoy)}.${p.diasRestantesSemana > 1 ? ` Para el resto de la semana te tocan unos ${formatCLP(p.porDia)} por día.` : ' Es el último día de la semana.'}`,
+        ruta: '/gastos',
+      };
+    }
+
+    case 'proyeccion_mes': {
+      const p = await obtenerProyeccion(db);
+      const base = `Si sigues a este ritmo (${formatCLP(p.ritmoDiario)} al día, sin contar fijos), terminas el mes en ${formatCLP(p.finDeMes)}`;
+      if (p.presupuestoMes == null) return { texto: `${base}.`, ruta: '/gastos' };
+      const fin = p.estado === 'pasado'
+        ? `: te pasarías ${formatCLP(p.finDeMes - p.presupuestoMes)} de tu presupuesto del mes. Ojo con los gastos chicos.`
+        : p.estado === 'ojo'
+          ? `, justo al límite de tu presupuesto (${formatCLP(p.presupuestoMes)}).`
+          : `, dentro de tu presupuesto (${formatCLP(p.presupuestoMes)}). Vas bien.`;
+      return { texto: base + fin, ruta: '/gastos' };
+    }
+
+    case 'finanzas_ir': {
+      if (i.ruta === '/gastos-banco') {
+        const n = await contarAvisosPendientes(db);
+        return { texto: n ? `Tienes ${n} ${n === 1 ? 'gasto del banco' : 'gastos del banco'} por revisar. Abriendo.` : 'Abriendo los gastos del banco.', accion: { tipo: 'navegar', ruta: i.ruta }, ruta: i.ruta };
+      }
+      return { texto: `Abriendo ${i.nombre}.`, accion: { tipo: 'navegar', ruta: i.ruta }, ruta: i.ruta };
     }
 
     // ---------- Modo Estudiante ----------

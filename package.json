@@ -34,6 +34,7 @@
     "expo-sqlite": "~58.0.18",
     "expo-status-bar": "~58.0.5",
     "expo-system-ui": "~58.0.7",
+    "expo-task-manager": "~58.0.14",
     "expo-web-browser": "~58.1.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -60,7 +61,7 @@
     "android": "expo start --android",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
-    "test": "tsx scripts/test-db.ts && tsx scripts/test-voz.ts && tsx scripts/test-estudio.ts"
+    "test": "tsx scripts/test-db.ts && tsx scripts/test-voz.ts && tsx scripts/test-estudio.ts && tsx scripts/test-finanzas.ts"
   },
   "private": true,
   "react-native-executorch": {

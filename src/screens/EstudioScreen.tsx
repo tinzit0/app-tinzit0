@@ -37,6 +37,9 @@ const HERRAMIENTAS: { icon: Icono; label: string; ruta: string }[] = [
   { icon: 'albums-outline', label: 'Tarjetas', ruta: '/tarjetas' },
   { icon: 'mic-outline', label: 'Grabar clase', ruta: '/grabar' },
   { icon: 'scan-outline', label: 'Escanear', ruta: '/escanear' },
+  { icon: 'document-text-outline', label: 'Nueva prueba', ruta: '/evaluacion' },
+  { icon: 'flash-outline', label: 'Repasar', ruta: '/repaso' },
+  { icon: 'location-outline', label: 'Asistencia', ruta: '/campus' },
   { icon: 'add-circle-outline', label: 'Nuevo ramo', ruta: '/ramo-form' },
 ];
 

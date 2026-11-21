@@ -118,7 +118,7 @@ export function AjustesScreen() {
         <NotifSettings />
       </Section>
 
-      <Section title="Asistente de voz">
+      <Section title="Asistente · Jarvis">
         <AsistenteSettings />
       </Section>
 

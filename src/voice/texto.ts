@@ -22,7 +22,9 @@ export function normalizar(s: string): string {
  * Cómo puede escribir el reconocedor de voz "Tinzit0":
  * tinzito, tin zito, tinsito, tin sito, tinzit0, tincito, tensito, quinsito…
  */
-const NOMBRE = '(?:t[ie]n\\s?[zsc]it[o0]|t[ie]n\\s?[zsc]ito|tinzit0|tin\\s?zi\\s?to|quin\\s?[sz]ito|t[ie]n[zs]i)';
+// También responde a "Jarvis" (y cómo lo suele escribir el reconocedor: yarvis, jarbis, harvis, charvis…).
+const NOMBRE =
+  '(?:t[ie]n\\s?[zsc]it[o0]|t[ie]n\\s?[zsc]ito|tinzit0|tin\\s?zi\\s?to|quin\\s?[sz]ito|t[ie]n[zs]i|[jyhc]h?ar[vb]i[sz]|yar[vb]is|jar\\s?vis)';
 const SALUDO = '(?:ey|hey|ei|oye|hei|e|hola|ok|okay)';
 const WAKE = new RegExp(`(?:^|\\s)${SALUDO}\\s*,?\\s*${NOMBRE}(?:\\s|$)`);
 const SOLO_NOMBRE = new RegExp(`^${NOMBRE}(?:\\s|$)`);

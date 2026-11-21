@@ -1,30 +1,53 @@
 /**
- * Voz de Tinzit0 (texto → voz) con expo-speech.
- * Busca una voz en español latino (Chile, México, EE.UU. latino o "es-419").
- * Si no encuentra, usa el español que tenga el celular.
+ * Voz del asistente (texto → voz) con expo-speech. Gratis: usa las voces del celular.
+ * - Busca una voz en español latino (Chile, México, EE.UU. latino o "es-419").
+ * - En Ajustes puedes elegir otra voz de las que tenga tu celular.
+ * - El estilo "jarvis" habla un poco más grave y pausado.
  */
 import * as Speech from 'expo-speech';
 
 import { paraVoz } from './ejecutar';
 
-const PREFERENCIA = ['es-CL', 'es-419', 'es-US', 'es-MX', 'es-AR', 'es-CO'];
-let vozElegida: { id?: string; lang: string } | null = null;
+const PREFERENCIA = ['es-CL', 'es-419', 'es-US', 'es-MX', 'es-AR', 'es-CO', 'es-ES'];
 
-async function elegirVoz() {
-  if (vozElegida) return vozElegida;
+export type VozEs = { id: string; nombre: string; idioma: string };
+
+let preferida: string | null = null;
+let estilo: 'jarvis' | 'cercano' = 'jarvis';
+let cache: { id?: string; lang: string } | null = null;
+
+/** La pantalla le dice al módulo qué voz y estilo usar. */
+export function configurarVoz(opc: { vozId?: string | null; estilo?: 'jarvis' | 'cercano' }) {
+  if (opc.vozId !== undefined && opc.vozId !== preferida) {
+    preferida = opc.vozId;
+    cache = null;
+  }
+  if (opc.estilo) estilo = opc.estilo;
+}
+
+/** Voces en español disponibles en el celular. */
+export async function vocesEspanol(): Promise<VozEs[]> {
   try {
     const voces = await Speech.getAvailableVoicesAsync();
-    const norm = (l: string) => l.replace('_', '-');
-    for (const lang of PREFERENCIA) {
-      const v = voces.find((x) => norm(x.language).toLowerCase() === lang.toLowerCase());
-      if (v) return (vozElegida = { id: v.identifier, lang });
-    }
-    const cualquiera = voces.find((x) => x.language.toLowerCase().startsWith('es'));
-    vozElegida = cualquiera ? { id: cualquiera.identifier, lang: norm(cualquiera.language) } : { lang: 'es-US' };
+    return voces
+      .filter((v) => v.language.toLowerCase().startsWith('es'))
+      .map((v) => ({ id: v.identifier, nombre: v.name || v.identifier, idioma: v.language.replace('_', '-') }))
+      .sort((a, b) => {
+        const pa = PREFERENCIA.findIndex((p) => a.idioma.toLowerCase() === p.toLowerCase());
+        const pb = PREFERENCIA.findIndex((p) => b.idioma.toLowerCase() === p.toLowerCase());
+        return (pa < 0 ? 99 : pa) - (pb < 0 ? 99 : pb) || a.nombre.localeCompare(b.nombre);
+      });
   } catch {
-    vozElegida = { lang: 'es-US' };
+    return [];
   }
-  return vozElegida;
+}
+
+async function elegirVoz() {
+  if (cache) return cache;
+  const voces = await vocesEspanol();
+  const elegida = voces.find((v) => v.id === preferida) ?? voces[0];
+  cache = elegida ? { id: elegida.id, lang: elegida.idioma } : { lang: 'es-US' };
+  return cache;
 }
 
 /** Dice el texto en voz alta. La promesa termina cuando acaba de hablar. */
@@ -35,8 +58,8 @@ export async function hablar(texto: string): Promise<void> {
     Speech.speak(paraVoz(texto), {
       language: v.lang,
       voice: v.id,
-      rate: 1.02,
-      pitch: 1.0,
+      rate: estilo === 'jarvis' ? 0.98 : 1.02,
+      pitch: estilo === 'jarvis' ? 0.9 : 1.0,
       onDone: () => resolve(),
       onStopped: () => resolve(),
       onError: () => resolve(),
@@ -46,4 +69,8 @@ export async function hablar(texto: string): Promise<void> {
 
 export function callar() {
   Speech.stop().catch(() => {});
+}
+
+export async function estaHablando() {
+  return Speech.isSpeakingAsync().catch(() => false);
 }

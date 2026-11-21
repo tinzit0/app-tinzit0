@@ -59,7 +59,14 @@ export type Intencion =
   | { tipo: 'clima'; cuando: 'ahora' | 'hoy' | 'semana' | 'fecha'; fecha: string | null; foco: 'lluvia' | 'temperatura' | null }
   | { tipo: 'recordatorio'; texto: string; segundos: number; hora: string | null }
   | { tipo: 'abrir'; destino: string }
+  // Interfaz holográfica (modo Jarvis)
+  | { tipo: 'tema_hud'; color: ColorHud }
+  | { tipo: 'efecto_hud'; efecto: 'scan' | 'pulse' }
+  | { tipo: 'estado_sistema' }
+  | { tipo: 'fin_conversacion' }
   | { tipo: 'desconocido'; texto: string };
+
+export type ColorHud = 'cian' | 'rojo' | 'azul' | 'verde' | 'morado' | 'naranjo' | 'dorado' | 'blanco' | 'rosado' | 'lima' | 'defecto';
 
 export type TipoIntencion = Intencion['tipo'];
 
@@ -336,6 +343,30 @@ function reglaAbrir(t: string): Intencion | null {
   return { tipo: 'abrir', destino: m[1].trim() };
 }
 
+const COLORES_HUD: Record<string, ColorHud> = {
+  cian: 'cian', celeste: 'cian', turquesa: 'cian', rojo: 'rojo', azul: 'azul', verde: 'verde', lima: 'lima',
+  morado: 'morado', violeta: 'morado', lila: 'morado', naranjo: 'naranjo', naranja: 'naranjo', dorado: 'dorado',
+  amarillo: 'dorado', oro: 'dorado', blanco: 'blanco', rosado: 'rosado', rosa: 'rosado',
+};
+
+function reglaHud(t: string): Intencion | null {
+  if (/^(eso es todo|eso seria todo|eso seria|nada mas|chao|adios|hasta luego|descansa|puedes descansar|listo gracias|termina|terminar|apagate)\b/.test(t)) {
+    return { tipo: 'fin_conversacion' };
+  }
+  if (/\b(colores normales|vuelve a lo normal|interfaz normal|reinicia la interfaz|color original|restablece (la interfaz|los colores))\b/.test(t)) {
+    return { tipo: 'tema_hud', color: 'defecto' };
+  }
+  const mColor =
+    /\b(?:ponte|pon(?:te)? el reactor|cambia(?:te)?(?: el)?(?: color)?(?: a)?|color|modo|tema)\s+(?:en\s+|a\s+|de\s+)?(cian|celeste|turquesa|rojo|azul|verde|lima|morado|violeta|lila|naranjo|naranja|dorado|amarillo|oro|blanco|rosado|rosa)\b/.exec(t);
+  if (mColor) return { tipo: 'tema_hud', color: COLORES_HUD[mColor[1]] };
+  if (/\b(modo escaner|escanea|escaneo|haz un escaneo|escanear)\b/.test(t)) return { tipo: 'efecto_hud', efecto: 'scan' };
+  if (/\b(haz un pulso|lanza un pulso)\b/.test(t)) return { tipo: 'efecto_hud', efecto: 'pulse' };
+  if (/\b(estado del sistema|diagnostico|reporte de estado|estado general|informe de estado|como estas|como andas|status)\b/.test(t)) {
+    return { tipo: 'estado_sistema' };
+  }
+  return null;
+}
+
 // ---------- Interpretación principal ----------
 
 export function interpretar(frase: string, hoy = new Date(), contexto: Contexto = {}): Intencion {
@@ -363,6 +394,7 @@ export function interpretar(frase: string, hoy = new Date(), contexto: Contexto 
   }
 
   const porRegla =
+    reglaHud(t) ??
     reglaRecordatorio(t, hoy) ??
     reglaAbrir(t) ??
     reglaTareas(t, hoy) ??

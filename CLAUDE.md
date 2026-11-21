@@ -50,6 +50,9 @@ src/voice/               texto.ts (normalizar, "ey Tinzit0"), interpretar.ts (NL
                          ejecutar.ts (acciones + respuestas + historial; devuelve "accion" para la UI),
                          acciones.ts (navegar / abrir app / recordatorio), reconocedor.ts, hablar.ts,
                          VozProvider.tsx (wake word con app abierta)
+src/jarvis/                Asistente estilo Jarvis (gratis, local): Reactor.tsx (HUD SVG animado), Boot.tsx (arranque),
+                         PanelHud.tsx + paneles.ts/panelesDatos.ts (datos por intención), persona.ts (estilo jarvis/cercano),
+                         colores.ts (colores HUD cambiables por voz). Wake word acepta "Jarvis" y "ey Tinzit0".
 src/clima/clima.ts       Open-Meteo (sin key), caché 30 min en settings, Concepción por defecto
 src/widget/              datos.ts, ResumenWidget.tsx, lib.ts (carga segura), index.tsx
 src/theme/               tokens.ts, ThemeProvider.tsx (sistema/claro/oscuro)

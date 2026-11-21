@@ -42,6 +42,8 @@ import { CATALOGO_APPS } from '@/utils/apps';
 import { categoria } from '@/utils/categorias';
 import { fechaLarga, fromISODate, startOfWeek, toISODate } from '@/utils/fechas';
 import { formatCLP } from '@/utils/moneda';
+import type { CambioHud, Panel } from '@/jarvis/paneles';
+import { panelPara } from '@/jarvis/panelesDatos';
 import { EJEMPLOS, interpretar, type Contexto, type Intencion } from './interpretar';
 import { normalizar, parecido } from './texto';
 
@@ -50,7 +52,21 @@ export type Accion =
   | { tipo: 'abrir_app'; pkg: string; nombre: string }
   | { tipo: 'recordatorio'; texto: string; segundos: number };
 
-export type Respuesta = { texto: string; ruta?: string; accion?: Accion; intencion?: Intencion['tipo'] };
+export type Respuesta = {
+  texto: string;
+  ruta?: string;
+  accion?: Accion;
+  intencion?: Intencion['tipo'];
+  /** Datos para el panel holográfico (modo Jarvis). */
+  panel?: Panel;
+  /** Cambio de la interfaz pedido por voz. */
+  hud?: CambioHud;
+  /** true = terminar el modo conversación. */
+  fin?: boolean;
+};
+
+/** Datos del celular que el ejecutor no puede leer solo (los pasa la pantalla). */
+export type Sistema = { bateria?: number | null };
 
 const azar = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
 const mayus = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -95,10 +111,12 @@ const PANTALLAS: [RegExp, string][] = [
   [/^(apps|aplicaciones)/, '/apps'],
 ];
 
-export async function responder(db: SQLiteDatabase, frase: string, contexto: Contexto = {}): Promise<Respuesta> {
+export async function responder(db: SQLiteDatabase, frase: string, contexto: Contexto = {}, sistema: Sistema = {}): Promise<Respuesta> {
   const i = interpretar(frase, new Date(), contexto);
-  const r = await ejecutar(db, i);
-  return { ...r, intencion: i.tipo };
+  const r = await ejecutar(db, i, sistema);
+  // El panel se arma DESPUÉS de ejecutar, así muestra los datos ya actualizados.
+  const panel = await panelPara(db, i, sistema).catch(() => undefined);
+  return { ...r, panel, intencion: i.tipo };
 }
 
 function textoClima(p: Pronostico, i: Extract<Intencion, { tipo: 'clima' }>): string {
@@ -128,7 +146,7 @@ function textoClima(p: Pronostico, i: Extract<Intencion, { tipo: 'clima' }>): st
   return `${mayus(cuando)} en ${ciudad}: ${infoClima(d.codigo).texto.toLowerCase()}, máxima de ${d.max}° y mínima de ${d.min}°${d.lluvia >= 30 ? `, ${d.lluvia}% de lluvia` : ''}.${consejo ? ` ${consejo}` : ''}`;
 }
 
-export async function ejecutar(db: SQLiteDatabase, i: Intencion): Promise<Respuesta> {
+export async function ejecutar(db: SQLiteDatabase, i: Intencion, sistema: Sistema = {}): Promise<Respuesta> {
   const nombre = (await getSetting(db, 'nombre')) ?? '';
   const hoy = toISODate();
 
@@ -473,6 +491,29 @@ export async function ejecutar(db: SQLiteDatabase, i: Intencion): Promise<Respue
       });
       if (app) return { texto: `Abriendo ${app.label}…`, accion: { tipo: 'abrir_app', pkg: app.pkg, nombre: app.label } };
       return { texto: `No sé abrir "${i.destino}" todavía. Puedo abrir pantallas de Tinzit0 (tareas, gastos, gym…) o tus apps (WhatsApp, Spotify…).` };
+    }
+
+    case 'tema_hud': {
+      const nombres: Record<string, string> = {
+        defecto: 'los colores originales', cian: 'cian', rojo: 'rojo', azul: 'azul', verde: 'verde', lima: 'lima',
+        morado: 'morado', naranjo: 'naranjo', dorado: 'dorado', blanco: 'blanco', rosado: 'rosado',
+      };
+      return { texto: i.color === 'defecto' ? 'Interfaz restablecida.' : `Cambiando a ${nombres[i.color]}.`, hud: { color: i.color } };
+    }
+
+    case 'efecto_hud':
+      return { texto: i.efecto === 'scan' ? 'Iniciando escaneo… Todo en orden.' : 'Pulso enviado.', hud: { efecto: i.efecto } };
+
+    case 'fin_conversacion':
+      return { texto: azar(['Aquí estaré cuando me necesites.', 'Quedo atento.', 'Hasta luego. Me quedo en espera.']), fin: true };
+
+    case 'estado_sistema': {
+      const tareas = await tareasDelDia(db, hoy);
+      const pend = tareas.filter((t) => !t.hecha).length;
+      const bat = sistema.bateria != null ? ` Batería al ${Math.round(sistema.bateria * 100)}%${sistema.bateria < 0.2 ? ', te recomiendo cargarla' : ''}.` : '';
+      return {
+        texto: `Todos los sistemas operativos.${bat} ${pend ? `Tienes ${pend} ${pend === 1 ? 'tarea pendiente' : 'tareas pendientes'} hoy.` : 'Sin tareas pendientes hoy.'}`,
+      };
     }
 
     case 'desconocido':

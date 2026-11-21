@@ -66,6 +66,13 @@ const casos: [string, string, Record<string, unknown>?][] = [
   ['cómo voy hoy', 'resumen'],
   ['qué hora es', 'fecha_hora', { que: 'hora' }],
   ['motívame', 'motivacion'],
+  ['ponte rojo', 'tema_hud', { color: 'rojo' }],
+  ['cambia el color a morado', 'tema_hud', { color: 'morado' }],
+  ['vuelve a lo normal', 'tema_hud', { color: 'defecto' }],
+  ['haz un escaneo', 'efecto_hud', { efecto: 'scan' }],
+  ['estado del sistema', 'estado_sistema'],
+  ['eso es todo', 'fin_conversacion'],
+  ['jarvis cómo estás', 'estado_sistema'],
 ];
 
 let ok = 0;
@@ -90,6 +97,12 @@ const wake: [string, string | null][] = [
   ['tinzito agrega una tarea', 'agrega una tarea'],
   ['tengo que ir al tinto', null],
   ['ey tú', null],
+  ['jarvis', ''],
+  ['hey jarvis qué hora es', 'que hora es'],
+  ['oye yarvis', ''],
+  ['ey harvis', ''],
+  ['charvis anota un gasto', 'anota un gasto'],
+  ['el jardín', null],
 ];
 for (const [frase, esperado] of wake) {
   const r = detectarActivacion(frase);
@@ -152,3 +165,18 @@ console.log(ok === total ? `✅ Asistente: ${ok}/${total} frases entendidas` : `
 if (ok !== total) process.exit(1);
 })();
 
+
+// Personalidad Jarvis
+import { aplicarEstilo } from '../src/jarvis/persona';
+{
+  const r1 = aplicarEstilo({ texto: 'Listo, anoté "Pan" para mañana ✅', intencion: 'agregar_tarea' }, 'jarvis', 'señor');
+  const r2 = aplicarEstilo({ texto: 'Uy, eso no lo cacho todavía 😅 Puedes pedirme cosas como: x', intencion: 'desconocido' }, 'jarvis', 'señor');
+  const r3 = aplicarEstilo({ texto: 'hola', intencion: 'saludo' }, 'jarvis', 'Martín');
+  const r4 = aplicarEstilo({ texto: 'Listo ✅', intencion: 'agregar_tarea' }, 'cercano', 'señor');
+  const okP =
+    /^Hecho(, señor)?. Anoté "Pan" para mañana$/.test(r1.texto) &&
+    r2.texto.startsWith('Me temo que no entendí') && !/[😅]/u.test(r2.texto) &&
+    r3.texto.includes('Martín') && r4.texto === 'Listo ✅';
+  console.log(okP ? '✅ Personalidad Jarvis' : `❌ Personalidad: ${JSON.stringify([r1.texto, r2.texto, r3.texto, r4.texto])}`);
+  if (!okP) process.exit(1);
+}

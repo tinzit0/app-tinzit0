@@ -27,8 +27,18 @@ export function IaSettings() {
   };
 
   useEffect(() => {
-    if (soportada) cargar().catch(console.warn);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!soportada) return;
+    let vivo = true;
+    Promise.all([iaDescargada(db), iaActivada(db)])
+      .then(([d, a]) => {
+        if (!vivo) return;
+        setDescargada(d);
+        setActiva(a);
+      })
+      .catch(console.warn);
+    return () => {
+      vivo = false;
+    };
   }, [db, soportada]);
 
   const descargar = () =>

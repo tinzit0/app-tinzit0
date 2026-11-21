@@ -1,9 +1,10 @@
 /**
  * Ajustes: perfil, notificaciones, asistente de voz, presupuesto, seguridad (huella), respaldo y apariencia.
  */
+import { reloadAppAsync } from 'expo';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
@@ -16,7 +17,17 @@ import { IaSettings } from '@/components/IaSettings';
 import { SpotifySettings } from '@/components/SpotifySettings';
 import { SegmentedControl } from '@/components/SegmentedControl';
 import { getSetting, setSetting } from '@/database/queries';
-import { elegirRespaldo, exportarRespaldo, restaurarRespaldo } from '@/database/respaldo';
+import {
+  compartirRespaldo,
+  copiaPreviaDisponible,
+  elegirRespaldo,
+  guardarRespaldoEnCarpeta,
+  marcarRespaldoHecho,
+  recuperarCopiaPrevia,
+  restaurarRespaldo,
+} from '@/database/respaldo';
+import { reprogramarTodo } from '@/notifications/programar';
+import { actualizarWidget } from '@/widget';
 import { useTheme, type ThemePreference } from '@/theme/ThemeProvider';
 import { radius, space, type } from '@/theme/tokens';
 import { fechaLarga, fromISODate } from '@/utils/fechas';
@@ -32,16 +43,29 @@ export function AjustesScreen() {
   const [ultimoRespaldo, setUltimoRespaldo] = useState<string | null>(null);
   const [exportando, setExportando] = useState(false);
   const [importando, setImportando] = useState(false);
+  const [copiaPrevia, setCopiaPrevia] = useState<string | null>(null);
 
-  const cargar = useCallback(async () => {
-    setNombre((await getSetting(db, 'nombre')) ?? '');
-    setPresupuesto((await getSetting(db, 'presupuesto_semanal')) ?? '');
-    setUltimoRespaldo(await getSetting(db, 'ultimo_respaldo'));
-  }, [db]);
+  const leer = useCallback(
+    () => Promise.all([getSetting(db, 'nombre'), getSetting(db, 'presupuesto_semanal'), getSetting(db, 'ultimo_respaldo')]),
+    [db],
+  );
+  const aplicar = ([n, p, u]: (string | null)[]) => {
+    setNombre(n ?? '');
+    setPresupuesto(p ?? '');
+    setUltimoRespaldo(u);
+    setCopiaPrevia(copiaPreviaDisponible());
+  };
+  const cargar = useCallback(() => leer().then(aplicar), [leer]);
 
   useEffect(() => {
-    cargar().catch(console.warn);
-  }, [cargar]);
+    let vivo = true;
+    leer()
+      .then((d) => vivo && aplicar(d))
+      .catch(console.warn);
+    return () => {
+      vivo = false;
+    };
+  }, [leer]);
 
   const inputStyle = [
     type.body,
@@ -49,11 +73,35 @@ export function AjustesScreen() {
     { color: colors.text, backgroundColor: colors.surfaceRaised, borderColor: colors.border },
   ];
 
-  const exportar = async () => {
+  const exportarCarpeta = async () => {
     setExportando(true);
     try {
-      await exportarRespaldo(db);
-      await cargar();
+      const nombre = await guardarRespaldoEnCarpeta(db);
+      if (nombre) {
+        await cargar();
+        Alert.alert('Respaldo guardado ✓', `Quedó como "${nombre}" en la carpeta que elegiste.`);
+      }
+    } catch (e) {
+      Alert.alert('No se pudo guardar', e instanceof Error ? e.message : String(e));
+    } finally {
+      setExportando(false);
+    }
+  };
+
+  const exportarCompartir = async () => {
+    setExportando(true);
+    try {
+      await compartirRespaldo(db);
+      // Android no avisa si de verdad se guardó: preguntamos antes de anotar la fecha.
+      Alert.alert('¿Se guardó bien?', 'Confírmalo solo si viste que el archivo quedó en Drive, el correo u otro lugar seguro.', [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Sí, quedó guardado',
+          onPress: () => {
+            marcarRespaldoHecho(db).then(cargar).catch(console.warn);
+          },
+        },
+      ]);
     } catch (e) {
       Alert.alert('No se pudo exportar', e instanceof Error ? e.message : String(e));
     } finally {
@@ -61,14 +109,36 @@ export function AjustesScreen() {
     }
   };
 
+  const exportar = () => {
+    if (Platform.OS !== 'android') {
+      exportarCompartir();
+      return;
+    }
+    Alert.alert('Exportar respaldo', '¿Dónde lo quieres guardar?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Compartir (Drive, correo…)', onPress: exportarCompartir },
+      { text: 'En una carpeta', onPress: exportarCarpeta },
+    ]);
+  };
+
+  /** Después de cambiar todos los datos: avisos, widget y reiniciar la app para que todo se lea de nuevo. */
+  const despuesDeRestaurar = async (titulo: string, detalle: string) => {
+    await reprogramarTodo(db).catch(console.warn);
+    await actualizarWidget(db).catch(console.warn);
+    Alert.alert(titulo, detalle, [{ text: 'OK', onPress: () => reloadAppAsync('Datos restaurados').catch(() => cargar()) }]);
+  };
+
   const importar = async () => {
     try {
-      const elegido = await elegirRespaldo();
+      const elegido = await elegirRespaldo(db);
       if (!elegido) return;
       const { data, resumen } = elegido;
+      const avisoAntiguo = resumen.tablasNuevasVacias.length
+        ? `\n\nEs de una versión anterior de la app: ${resumen.tablasNuevasVacias.length} secciones nuevas quedarán vacías.`
+        : '';
       Alert.alert(
         '¿Restaurar este respaldo?',
-        `Es del ${resumen.fecha} y tiene ${resumen.filas} registros.\n\nSe van a REEMPLAZAR todos tus datos actuales.`,
+        `Es del ${resumen.fecha} y tiene ${resumen.filas} registros.\n\nSe van a REEMPLAZAR todos tus datos actuales. Antes guardo una copia, por si quieres volver atrás.${avisoAntiguo}`,
         [
           { text: 'Cancelar', style: 'cancel' },
           {
@@ -77,11 +147,13 @@ export function AjustesScreen() {
             onPress: async () => {
               setImportando(true);
               try {
-                await restaurarRespaldo(db, data);
-                await cargar();
-                Alert.alert('Listo 🙌', 'Tus datos quedaron restaurados.');
+                const r = await restaurarRespaldo(db, data);
+                await despuesDeRestaurar(
+                  'Listo 🙌',
+                  `Tus datos quedaron restaurados${r.omitidas ? ` (se omitieron ${r.omitidas} registros sueltos que no calzaban)` : ''}. La app se va a reiniciar.`,
+                );
               } catch (e) {
-                Alert.alert('No se pudo restaurar', e instanceof Error ? e.message : String(e));
+                Alert.alert('No se pudo restaurar', `${e instanceof Error ? e.message : String(e)}\n\nTus datos actuales no cambiaron.`);
               } finally {
                 setImportando(false);
               }
@@ -92,6 +164,31 @@ export function AjustesScreen() {
     } catch (e) {
       Alert.alert('Archivo no válido', e instanceof Error ? e.message : String(e));
     }
+  };
+
+  const recuperar = () => {
+    Alert.alert(
+      '¿Volver a tus datos de antes?',
+      `Se recuperan los datos que tenías antes de la última importación (${copiaPrevia}). Lo de ahora queda guardado como copia.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Recuperar',
+          style: 'destructive',
+          onPress: async () => {
+            setImportando(true);
+            try {
+              await recuperarCopiaPrevia(db);
+              await despuesDeRestaurar('Listo', 'Volviste a tus datos de antes. La app se va a reiniciar.');
+            } catch (e) {
+              Alert.alert('No se pudo recuperar', `${e instanceof Error ? e.message : String(e)}\n\nTus datos actuales no cambiaron.`);
+            } finally {
+              setImportando(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -188,6 +285,9 @@ export function AjustesScreen() {
         <View style={{ gap: space.sm }}>
           <Button label="Exportar respaldo" onPress={exportar} loading={exportando} />
           <Button label="Importar respaldo" variant="secondary" onPress={importar} loading={importando} />
+          {copiaPrevia ? (
+            <Button label="Recuperar datos de antes de importar" variant="secondary" onPress={recuperar} disabled={importando} />
+          ) : null}
         </View>
       </Section>
 

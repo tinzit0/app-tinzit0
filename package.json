@@ -53,6 +53,8 @@
   "devDependencies": {
     "@types/node": "^26.6.6",
     "@types/react": "~19.3.0",
+    "eslint": "^9.39.5",
+    "eslint-config-expo": "~58.0.4",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3"
   },
@@ -61,7 +63,7 @@
     "android": "expo start --android",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
-    "test": "tsx scripts/test-db.ts && tsx scripts/test-voz.ts && tsx scripts/test-estudio.ts && tsx scripts/test-finanzas.ts && tsx scripts/test-bienestar.ts"
+    "test": "tsx scripts/test-db.ts && tsx scripts/test-voz.ts && tsx scripts/test-estudio.ts && tsx scripts/test-finanzas.ts && tsx scripts/test-bienestar.ts && tsx scripts/test-integridad.ts && tsx scripts/test-privacidad.ts && tsx scripts/test-flujos.ts && tsx scripts/test-funciones.ts"
   },
   "private": true,
   "react-native-executorch": {

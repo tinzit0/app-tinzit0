@@ -8,11 +8,22 @@ import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/Button';
+import { AppText } from '@/components/AppText';
 import { Chip } from '@/components/Chip';
 import { Field, FieldLabel } from '@/components/Field';
-import { actualizarHabito, COLORES, crearHabito, eliminarHabito, ICONOS, obtenerHabito, SUGERENCIAS } from '@/database/habitos';
+import { actualizarHabito, COLORES, crearHabito, eliminarHabito, ICONOS, leerDias, obtenerHabito, SUGERENCIAS } from '@/database/habitos';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, space } from '@/theme/tokens';
+
+const DIAS = [
+  { n: 1, corto: 'L', largo: 'lunes' },
+  { n: 2, corto: 'M', largo: 'martes' },
+  { n: 3, corto: 'M', largo: 'miércoles' },
+  { n: 4, corto: 'J', largo: 'jueves' },
+  { n: 5, corto: 'V', largo: 'viernes' },
+  { n: 6, corto: 'S', largo: 'sábado' },
+  { n: 7, corto: 'D', largo: 'domingo' },
+];
 
 export function HabitoFormScreen() {
   const db = useSQLiteContext();
@@ -24,6 +35,7 @@ export function HabitoFormScreen() {
   const [nombre, setNombre] = useState('');
   const [icono, setIcono] = useState('checkmark');
   const [color, setColor] = useState(COLORES[0]);
+  const [dias, setDias] = useState<number[]>([1, 2, 3, 4, 5, 6, 7]); // todos = cada día
 
   useEffect(() => {
     if (!id) return;
@@ -32,14 +44,17 @@ export function HabitoFormScreen() {
       setNombre(h.name);
       setIcono(h.icon);
       setColor(h.color);
+      setDias(leerDias(h.days) ?? [1, 2, 3, 4, 5, 6, 7]);
     });
   }, [db, id]);
 
   const guardar = async () => {
     if (!nombre.trim()) return;
-    if (id) await actualizarHabito(db, id, { name: nombre, icon: icono, color });
-    else await crearHabito(db, { name: nombre, icon: icono, color });
-    router.canGoBack() ? router.back() : router.replace('/habitos');
+    const days = dias.length === 7 ? null : dias;
+    if (id) await actualizarHabito(db, id, { name: nombre, icon: icono, color, days });
+    else await crearHabito(db, { name: nombre, icon: icono, color, days });
+    if (router.canGoBack()) router.back();
+    else router.replace('/habitos');
   };
 
   const borrar = () =>
@@ -101,6 +116,28 @@ export function HabitoFormScreen() {
               </Pressable>
             ))}
           </View>
+        </View>
+
+        <View style={styles.section}>
+          <FieldLabel>Qué días</FieldLabel>
+          <View style={styles.wrap}>
+            {DIAS.map((d) => {
+              const sel = dias.includes(d.n);
+              return (
+                <Chip
+                  key={d.n}
+                  compact
+                  label={d.corto}
+                  selected={sel}
+                  accessibilityLabel={`${d.largo}${sel ? ', sí' : ', no'}`}
+                  onPress={() => setDias((xs) => (sel ? (xs.length > 1 ? xs.filter((x) => x !== d.n) : xs) : [...xs, d.n].sort()))}
+                />
+              );
+            })}
+          </View>
+          <AppText variant="caption" tone="tertiary" style={{ marginTop: space.sm }}>
+            {dias.length === 7 ? 'Todos los días.' : `${dias.length} ${dias.length === 1 ? 'día' : 'días'} por semana. Los días que no toca no cortan tu racha.`}
+          </AppText>
         </View>
 
         <View style={styles.section}>

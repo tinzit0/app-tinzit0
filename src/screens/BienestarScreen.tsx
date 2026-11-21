@@ -183,7 +183,7 @@ export function BienestarScreen() {
             <View style={styles.ajuste}>
               <View style={{ flex: 1 }}>
                 <AppText variant="callout">Pedir huella para entrar</AppText>
-                <AppText variant="caption" tone="tertiary">"Estoy a mil" y el plan de crisis siempre abren sin huella</AppText>
+                <AppText variant="caption" tone="tertiary">“Estoy a mil” y el plan de crisis siempre abren sin huella</AppText>
               </View>
               <Switch
                 value={huella}

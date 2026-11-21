@@ -11,6 +11,11 @@ const MESES = [
 ];
 
 /** Convierte una fecha a 'YYYY-MM-DD' usando la hora local del celular. */
+/** La fecha de hace `n` días (a la misma hora). */
+export function haceDias(n: number, desde: Date = new Date()): Date {
+  return new Date(desde.getFullYear(), desde.getMonth(), desde.getDate() - n, desde.getHours(), desde.getMinutes());
+}
+
 export function toISODate(d: Date = new Date()): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');

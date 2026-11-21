@@ -1,135 +1,128 @@
 /**
  * Respaldo: exportar e importar TODOS tus datos en un archivo JSON.
  *
- * - Exportar: lee cada tabla de la base de datos, arma un JSON y abre el
- *   menú "Compartir" de Android (lo puedes guardar en Drive, mandar por
- *   WhatsApp, correo, etc.).
- * - Importar: eliges el archivo y se REEMPLAZAN todos los datos actuales.
+ * Exportar (dos formas):
+ * - "Guardar en una carpeta" (Android): eliges la carpeta, se escribe el archivo y se COMPRUEBA
+ *   leyéndolo de vuelta. Solo entonces se anota la fecha del último respaldo.
+ * - "Compartir": abre el menú de Android (Drive, WhatsApp, correo…). Como Android no avisa si de verdad
+ *   se guardó, la app te pregunta y solo anota la fecha si confirmas.
  *
- * Funciona con cualquier tabla nueva que agreguemos en el futuro, porque
- * lee la lista de tablas directamente de la base de datos.
+ * Importar:
+ * - El archivo se revisa ENTERO antes de tocar nada (ver respaldoFormato.ts).
+ * - Antes de reemplazar, se guarda una copia de tus datos actuales en el celular
+ *   ("Recuperar datos de antes de importar" en Ajustes).
+ * - El reemplazo es atómico: o queda todo el respaldo, o quedan tus datos como estaban.
+ *
+ * La parte de base de datos está en respaldoDatos.ts (probada en scripts/test-respaldo.ts).
  */
 import * as DocumentPicker from 'expo-document-picker';
-import { File, Paths } from 'expo-file-system';
+import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { toISODate } from '@/utils/fechas';
 import { getSetting, setSetting } from './queries';
+import { leerRespaldo, type ArchivoRespaldo, type ResumenRespaldo } from './respaldoFormato';
+import { contextoValidacion, restaurarDatosSinFila, volcarDatos, type ResultadoRestauracion } from './respaldoDatos';
+import { enExclusiva } from './tx';
 
-const APP_ID = 'tinzit0';
+export type { ArchivoRespaldo, ResumenRespaldo };
 
-type ArchivoRespaldo = {
-  app: string;
-  schemaVersion: number;
-  exportedAt: string;
-  tables: Record<string, Record<string, unknown>[]>;
-};
+const COPIA_PREVIA = 'tinzit0-antes-de-importar.json';
+const nombreArchivo = () => `tinzit0-respaldo-${toISODate()}.json`;
 
-/** Tablas de la app (todas menos las internas de SQLite). */
-async function listarTablas(db: SQLiteDatabase): Promise<string[]> {
-  const rows = await db.getAllAsync<{ name: string }>(
-    `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name`,
-  );
-  return rows.map((r) => r.name);
-}
-
-async function columnasDe(db: SQLiteDatabase, tabla: string): Promise<string[]> {
-  const rows = await db.getAllAsync<{ name: string }>(`PRAGMA table_info("${tabla}")`);
-  return rows.map((r) => r.name);
-}
-
-/** Crea el archivo de respaldo y abre el menú para compartirlo/guardarlo. */
-export async function exportarRespaldo(db: SQLiteDatabase): Promise<void> {
-  const version = (await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version'))?.user_version ?? 0;
-  const tables: ArchivoRespaldo['tables'] = {};
-  for (const t of await listarTablas(db)) {
-    tables[t] = await db.getAllAsync<Record<string, unknown>>(`SELECT * FROM "${t}"`);
-  }
-  const data: ArchivoRespaldo = {
-    app: APP_ID,
-    schemaVersion: version,
-    exportedAt: new Date().toISOString(),
-    tables,
-  };
-
-  const archivo = new File(Paths.cache, `tinzit0-respaldo-${toISODate()}.json`);
-  if (archivo.exists) archivo.delete();
-  await archivo.write(JSON.stringify(data));
-
-  if (!(await Sharing.isAvailableAsync())) {
-    throw new Error('Compartir no está disponible en este dispositivo.');
-  }
-  await Sharing.shareAsync(archivo.uri, {
-    mimeType: 'application/json',
-    dialogTitle: 'Guardar respaldo de Tinzit0',
-  });
+/** Marca que hiciste un respaldo hoy (solo cuando estamos seguros de que se guardó). */
+export async function marcarRespaldoHecho(db: SQLiteDatabase): Promise<void> {
   await setSetting(db, 'ultimo_respaldo', toISODate());
 }
 
-export type ResumenImport = { tablas: number; filas: number; fecha: string };
-
 /**
- * Pide elegir un archivo de respaldo y lo valida.
- * Devuelve null si cancelaste. Lanza un error si el archivo no sirve.
+ * Android: eliges una carpeta y el respaldo se escribe ahí. Se lee de vuelta para comprobarlo.
+ * Devuelve el nombre del archivo, o null si cancelaste.
  */
-export async function elegirRespaldo(): Promise<{ data: ArchivoRespaldo; resumen: ResumenImport } | null> {
-  const res = await DocumentPicker.getDocumentAsync({
-    type: ['application/json', 'text/plain', '*/*'],
-    copyToCacheDirectory: true,
-  });
-  if (res.canceled || !res.assets?.[0]) return null;
-
-  const texto = await new File(res.assets[0].uri).text();
-  let data: ArchivoRespaldo;
+export async function guardarRespaldoEnCarpeta(db: SQLiteDatabase): Promise<string | null> {
+  let carpeta: Directory;
   try {
-    data = JSON.parse(texto);
+    carpeta = await Directory.pickDirectoryAsync();
   } catch {
-    throw new Error('Ese archivo no es un respaldo válido (no es JSON).');
+    return null; // cancelaste el selector
   }
-  if (data?.app !== APP_ID || typeof data.tables !== 'object') {
-    throw new Error('Ese archivo no es un respaldo de Tinzit0.');
-  }
-  const filas = Object.values(data.tables).reduce((n, rows) => n + (rows?.length ?? 0), 0);
-  return {
-    data,
-    resumen: { tablas: Object.keys(data.tables).length, filas, fecha: data.exportedAt?.slice(0, 10) ?? '?' },
-  };
+  const texto = JSON.stringify(await volcarDatos(db));
+  const nombre = nombreArchivo();
+  const archivo = carpeta.createFile(nombre, 'application/json');
+  await archivo.write(texto);
+  const leido = await archivo.text();
+  if (leido.length !== texto.length) throw new Error('El archivo no quedó completo. Prueba en otra carpeta.');
+  await marcarRespaldoHecho(db);
+  return nombre;
 }
 
 /**
- * Reemplaza todos los datos por los del respaldo.
- * Todo ocurre en una transacción: si algo falla, no se pierde nada.
+ * Abre el menú "Compartir". NO anota la fecha: Android no avisa si de verdad se guardó.
+ * Después de esto, la pantalla pregunta "¿Se guardó bien?" y llama a marcarRespaldoHecho.
  */
-export async function restaurarRespaldo(db: SQLiteDatabase, data: ArchivoRespaldo): Promise<void> {
-  const tablasActuales = await listarTablas(db);
-  await db.execAsync('PRAGMA foreign_keys = OFF');
-  try {
-    await db.withExclusiveTransactionAsync(async (tx) => {
-      for (const t of tablasActuales) {
-        await tx.runAsync(`DELETE FROM "${t}"`);
-      }
-      for (const t of tablasActuales) {
-        const filas = data.tables[t];
-        if (!Array.isArray(filas) || filas.length === 0) continue;
-        // Solo insertamos columnas que existen hoy (por si el respaldo es de otra versión).
-        const cols = await columnasDe(tx, t);
-        for (const fila of filas) {
-          const usar = cols.filter((c) => c in fila);
-          if (usar.length === 0) continue;
-          const placeholders = usar.map(() => '?').join(', ');
-          const valores = usar.map((c) => fila[c] as string | number | null);
-          await tx.runAsync(
-            `INSERT OR REPLACE INTO "${t}" (${usar.map((c) => `"${c}"`).join(', ')}) VALUES (${placeholders})`,
-            valores,
-          );
-        }
-      }
-    });
-  } finally {
-    await db.execAsync('PRAGMA foreign_keys = ON');
+export async function compartirRespaldo(db: SQLiteDatabase): Promise<void> {
+  if (!(await Sharing.isAvailableAsync())) throw new Error('Compartir no está disponible en este dispositivo.');
+  const archivo = new File(Paths.cache, nombreArchivo());
+  if (archivo.exists) archivo.delete();
+  await archivo.write(JSON.stringify(await volcarDatos(db)));
+  await Sharing.shareAsync(archivo.uri, { mimeType: 'application/json', dialogTitle: 'Guardar respaldo de Tinzit0' });
+}
+
+/**
+ * Pide elegir un archivo de respaldo y lo revisa completo.
+ * Devuelve null si cancelaste. Lanza un error entendible si el archivo no sirve.
+ */
+export async function elegirRespaldo(db: SQLiteDatabase): Promise<{ data: ArchivoRespaldo; resumen: ResumenRespaldo } | null> {
+  const res = await DocumentPicker.getDocumentAsync({ type: ['application/json', 'text/plain', '*/*'], copyToCacheDirectory: true });
+  if (res.canceled || !res.assets?.[0]) return null;
+  const texto = await new File(res.assets[0].uri).text();
+  return leerRespaldo(texto, await contextoValidacion(db));
+}
+
+/** Guarda una copia de tus datos actuales en el celular (para poder deshacer una importación). */
+async function guardarCopiaPrevia(db: SQLiteDatabase): Promise<void> {
+  const texto = JSON.stringify(await volcarDatos(db));
+  const archivo = new File(Paths.document, COPIA_PREVIA);
+  if (archivo.exists) archivo.delete();
+  await archivo.write(texto);
+  if (!archivo.exists || (await archivo.text()).length !== texto.length) {
+    throw new Error('No pude guardar una copia de tus datos actuales, así que no importé nada.');
   }
-  await setSetting(db, 'ultimo_respaldo', toISODate());
+}
+
+/**
+ * Reemplaza todos tus datos por los del respaldo.
+ * Primero guarda una copia de lo actual; si eso falla, no toca nada.
+ */
+export function restaurarRespaldo(db: SQLiteDatabase, data: ArchivoRespaldo): Promise<ResultadoRestauracion> {
+  return enExclusiva(async () => {
+    await guardarCopiaPrevia(db);
+    return restaurarDatosSinFila(db, data);
+  });
+}
+
+/** ¿Hay una copia de antes de la última importación? Devuelve su fecha o null. */
+export function copiaPreviaDisponible(): string | null {
+  try {
+    const archivo = new File(Paths.document, COPIA_PREVIA);
+    if (!archivo.exists) return null;
+    const fecha = archivo.modificationTime ?? null;
+    return fecha ? toISODate(new Date(fecha)) : '?';
+  } catch {
+    return null;
+  }
+}
+
+/** Vuelve a los datos que tenías antes de la última importación (y guarda los de ahora como nueva copia). */
+export function recuperarCopiaPrevia(db: SQLiteDatabase): Promise<ResultadoRestauracion> {
+  return enExclusiva(async () => {
+    const archivo = new File(Paths.document, COPIA_PREVIA);
+    if (!archivo.exists) throw new Error('No hay una copia guardada.');
+    const { data } = leerRespaldo(await archivo.text(), await contextoValidacion(db));
+    await guardarCopiaPrevia(db);
+    return restaurarDatosSinFila(db, data);
+  });
 }
 
 /** ¿Hace más de 7 días (o nunca) que no respaldas, y ya tienes datos que cuidar? */

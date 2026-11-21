@@ -49,7 +49,8 @@ export function EjercicioScreen() {
         style: 'destructive',
         onPress: async () => {
           await eliminarEjercicio(db, Number(id));
-          router.canGoBack() ? router.back() : router.replace('/gym');
+          if (router.canGoBack()) router.back();
+          else router.replace('/gym');
         },
       },
     ]);

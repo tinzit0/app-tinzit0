@@ -326,21 +326,68 @@ const MIGRATIONS: string[] = [
   INSERT OR IGNORE INTO settings (key, value) VALUES
     ('notif_tarjeta', '1'), ('hora_tarjeta', '22:00'), ('bienestar_bloqueo', '0');
   `,
+
+  // v10 — Presupuesto mensual por categoría, gastos marcados como "no son repetidos" y días de cada hábito.
+  `
+  CREATE TABLE IF NOT EXISTS category_budgets (
+    category TEXT PRIMARY KEY NOT NULL,
+    monthly  INTEGER NOT NULL                  -- límite mensual en CLP
+  );
+
+  CREATE TABLE IF NOT EXISTS expense_pairs_ok (
+    a INTEGER NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
+    b INTEGER NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
+    PRIMARY KEY (a, b)                         -- a < b: "estos dos gastos NO son el mismo"
+  );
+
+  -- Días en que toca el hábito: '1,3,5' (lunes=1 … domingo=7). NULL = todos los días.
+  ALTER TABLE habits ADD COLUMN days TEXT;
+  `,
 ];
 
 /** Se llama una vez al abrir la app (desde SQLiteProvider en el _layout raíz). */
 export async function migrateDb(db: SQLiteDatabase): Promise<void> {
-  // WAL = escritura más rápida; foreign_keys = borra en cascada lo relacionado.
-  await db.execAsync(`PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;`);
+  // WAL = escritura más rápida; foreign_keys = borra en cascada lo relacionado;
+  // busy_timeout = si otra conexión está escribiendo (ver tx.ts), espera hasta 5 s en vez de fallar.
+  await db.execAsync(`PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;`);
 
+  await aplicarMigraciones(db, MIGRATIONS);
+}
+
+/**
+ * Aplica las migraciones que falten. Cada una se guarda JUNTO con su número de versión
+ * en la misma transacción: si la app se cierra a la mitad, no queda ni el cambio ni la versión
+ * (SQLite deshace todo) y se reintenta la próxima vez. Exportada para probarla.
+ */
+export async function aplicarMigraciones(db: SQLiteDatabase, migraciones: string[]): Promise<number> {
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
   let version = row?.user_version ?? 0;
-
-  while (version < MIGRATIONS.length) {
+  // Si la base es de una versión más nueva (APK antiguo instalado encima), no se toca nada.
+  while (version < migraciones.length) {
+    const siguiente = version + 1;
+    const sql = migraciones[version];
     await db.withTransactionAsync(async () => {
-      await db.execAsync(MIGRATIONS[version]);
+      await db.execAsync(sql);
+      await db.execAsync(`PRAGMA user_version = ${siguiente}`);
     });
-    version += 1;
-    await db.execAsync(`PRAGMA user_version = ${version}`);
+    version = siguiente;
   }
+  return version;
+}
+
+/** Versión del esquema que entiende esta versión de la app. */
+export const VERSION_ESQUEMA = MIGRATIONS.length;
+
+/** Tablas que existían en la versión `v` del esquema (para validar respaldos antiguos). */
+export function tablasHastaVersion(v: number): string[] {
+  const tablas = new Set<string>();
+  for (const sql of MIGRATIONS.slice(0, Math.max(0, v))) {
+    for (const m of sql.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/g)) tablas.add(m[1]);
+  }
+  return [...tablas];
+}
+
+/** Los ajustes por defecto de todas las migraciones (se vuelven a poner tras restaurar un respaldo antiguo). */
+export function ajustesPorDefecto(): string[] {
+  return MIGRATIONS.flatMap((sql) => [...sql.matchAll(/INSERT OR IGNORE INTO settings[\s\S]*?;/g)].map((m) => m[0]));
 }

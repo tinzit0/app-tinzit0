@@ -18,13 +18,15 @@ type Props = { habitos: HabitoConEstado[]; onToggle: (h: HabitoConEstado) => voi
 export function HabitosHoy({ habitos, onToggle }: Props) {
   const router = useRouter();
   const { colors } = useTheme();
-  const hechos = habitos.filter((h) => h.hechoHoy).length;
+  // Solo los que tocan hoy (o que igual marcaste).
+  const deHoy = habitos.filter((h) => h.tocaHoy || h.hechoHoy);
+  const hechos = deHoy.filter((h) => h.hechoHoy).length;
 
   return (
     <View>
       <View style={styles.header}>
         <AppText variant="headline">
-          Hábitos <AppText variant="callout" tone="tertiary">{hechos}/{habitos.length}</AppText>
+          Hábitos <AppText variant="callout" tone="tertiary">{hechos}/{deHoy.length}</AppText>
         </AppText>
         <Pressable onPress={() => router.push('/habitos')} hitSlop={10} accessibilityRole="button">
           <AppText variant="callout" tone="accent">{habitos.length ? 'Ver todo' : 'Crear'}</AppText>
@@ -41,7 +43,7 @@ export function HabitosHoy({ habitos, onToggle }: Props) {
         </PressableScale>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-          {habitos.map((h) => (
+          {deHoy.map((h) => (
             <PressableScale
               key={h.id}
               pressedScale={0.92}

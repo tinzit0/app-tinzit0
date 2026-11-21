@@ -27,12 +27,18 @@ export function EstadisticasScreen() {
   const [datos, setDatos] = useState<ComparacionMes | null>(null);
 
   useEffect(() => {
-    setDatos(null);
-    compararMes(db, mes.anio, mes.mes0).then(setDatos).catch(console.warn);
+    let vivo = true;
+    compararMes(db, mes.anio, mes.mes0)
+      .then((d) => vivo && setDatos(d))
+      .catch(console.warn);
+    return () => {
+      vivo = false;
+    };
   }, [db, mes]);
 
   const mover = (d: number) => {
     const f = new Date(mes.anio, mes.mes0 + d, 1);
+    setDatos(null); // mientras carga el otro mes
     setMes({ anio: f.getFullYear(), mes0: f.getMonth() });
   };
   const esMesActual = mes.anio === hoy.getFullYear() && mes.mes0 === hoy.getMonth();

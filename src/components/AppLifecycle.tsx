@@ -31,12 +31,28 @@ export function AppLifecycle() {
   useEffect(() => {
     if (Platform.OS === 'web') return;
 
+    // Una sola pasada a la vez: si se pide otra mientras corre (abrir/salir rápido),
+    // se hace UNA más al terminar, en vez de dos en paralelo.
+    let corriendo = false;
+    let otraVez = false;
     const alDia = async () => {
-      await aplicarFijosDelMes(db).catch(console.warn);
-      await sincronizarAvisos(db).catch(console.warn);
-      await conciliarAsistencia(db).catch(console.warn);
-      await reprogramarTodo(db);
-      await actualizarWidget(db);
+      if (corriendo) {
+        otraVez = true;
+        return;
+      }
+      corriendo = true;
+      try {
+        do {
+          otraVez = false;
+          await aplicarFijosDelMes(db).catch(console.warn);
+          await sincronizarAvisos(db).catch(console.warn);
+          await conciliarAsistencia(db).catch(console.warn);
+          await reprogramarTodo(db).catch(console.warn);
+          await actualizarWidget(db).catch(console.warn);
+        } while (otraVez);
+      } finally {
+        corriendo = false;
+      }
     };
 
     prepararNotificaciones(true)

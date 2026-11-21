@@ -10,6 +10,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { getSetting, setSetting } from '@/database/queries';
+import { fetchConLimite } from '@/utils/red';
 
 export type Ubicacion = { nombre: string; lat: number; lon: number };
 
@@ -101,7 +102,7 @@ export async function guardarUbicacion(db: SQLiteDatabase, u: Ubicacion) {
 /** Busca ciudades por nombre (para elegir en Ajustes). */
 export async function buscarCiudades(texto: string): Promise<Ubicacion[]> {
   const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(texto)}&count=6&language=es&format=json`;
-  const r = await fetch(url);
+  const r = await fetchConLimite(url, {}, 8000);
   if (!r.ok) throw new Error('No se pudo buscar la ciudad');
   const j = (await r.json()) as { results?: { name: string; admin1?: string; country?: string; latitude: number; longitude: number }[] };
   return (j.results ?? []).map((c) => ({
@@ -125,7 +126,7 @@ async function descargar(u: Ubicacion): Promise<Pronostico> {
     timezone: 'auto',
     forecast_days: '7',
   });
-  const r = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+  const r = await fetchConLimite(`https://api.open-meteo.com/v1/forecast?${params}`, {}, 10_000);
   if (!r.ok) throw new Error(`Open-Meteo respondió ${r.status}`);
   const j = await r.json();
 

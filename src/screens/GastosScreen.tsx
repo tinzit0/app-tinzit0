@@ -33,12 +33,13 @@ import {
 } from '@/database/gastos';
 import { totalFijosMes } from '@/database/fijos';
 import { contarAvisosPendientes, obtenerProyeccion } from '@/database/finanzas';
+import { posiblesDuplicados } from '@/database/presupuestos';
 import type { Proyeccion } from '@/finanzas/proyeccion';
 import { listarMetas } from '@/database/metas';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, space } from '@/theme/tokens';
 import { categoria, colorCategoria } from '@/utils/categorias';
-import { fechaLarga, fromISODate, toISODate } from '@/utils/fechas';
+import { fechaLarga, fromISODate, haceDias, toISODate } from '@/utils/fechas';
 import { formatCLP } from '@/utils/moneda';
 
 type Periodo = 'semana' | 'mes';
@@ -61,6 +62,7 @@ export function GastosScreen() {
   const [ahorrado, setAhorrado] = useState(0);
   const [proy, setProy] = useState<Proyeccion | null>(null);
   const [delBanco, setDelBanco] = useState(0);
+  const [repetidos, setRepetidos] = useState(0);
 
   const cargar = useCallback(async () => {
     const hoy = new Date();
@@ -82,6 +84,7 @@ export function GastosScreen() {
     setAhorrado((await listarMetas(db)).reduce((n, m) => n + m.ahorrado, 0));
     setProy(await obtenerProyeccion(db));
     setDelBanco(await contarAvisosPendientes(db));
+    setRepetidos((await posiblesDuplicados(db).catch(() => [])).length);
   }, [db, periodo]);
 
   useFocusEffect(
@@ -104,7 +107,7 @@ export function GastosScreen() {
   const restante = datos ? datos.presupuesto - datos.totalSemana : 0;
   const ratio = datos && datos.presupuesto > 0 ? datos.totalSemana / datos.presupuesto : 0;
   const hoyISO = toISODate();
-  const ayerISO = toISODate(new Date(Date.now() - 86400000));
+  const ayerISO = toISODate(haceDias(1));
 
   return (
     <View style={styles.flex}>
@@ -135,6 +138,21 @@ export function GastosScreen() {
             </AppText>
           ) : null}
         </View>
+
+        {/* Posibles gastos anotados dos veces */}
+        {repetidos > 0 ? (
+          <Card
+            onPress={() => router.push('/duplicados')}
+            accessibilityLabel={`${repetidos} posibles gastos repetidos`}
+            style={[styles.banner, { backgroundColor: colors.warningSoft, borderColor: 'transparent' }]}
+          >
+            <Ionicons name="copy-outline" size={20} color={colors.warning} />
+            <AppText variant="callout" style={{ flex: 1 }}>
+              {repetidos === 1 ? '¿Anotaste un gasto dos veces? Revísalo' : `${repetidos} posibles gastos repetidos`}
+            </AppText>
+            <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+          </Card>
+        ) : null}
 
         {/* Gastos detectados del banco por revisar */}
         {delBanco > 0 ? (
@@ -216,6 +234,14 @@ export function GastosScreen() {
             <AppText variant="caption" tone="tertiary" numberOfLines={1}>Sácale foto</AppText>
           </Card>
         </View>
+        <Card onPress={() => router.push('/presupuestos')} accessibilityLabel="Presupuestos por categoría y exportar CSV" style={[styles.banner, { marginTop: space.md }]}>
+          <Ionicons name="pie-chart-outline" size={20} color={colors.accent} />
+          <View style={{ flex: 1 }}>
+            <AppText variant="callout">Presupuestos por categoría</AppText>
+            <AppText variant="caption" tone="tertiary">Límite al mes y exportar a Excel</AppText>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+        </Card>
 
         {/* Presupuesto semanal */}
         {datos && datos.presupuesto > 0 ? (

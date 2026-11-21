@@ -8,6 +8,7 @@ import { proyectar, type Proyeccion } from '@/finanzas/proyeccion';
 import { toISODate } from '@/utils/fechas';
 import { crearGasto, presupuestoSemanal, rangoMes, rangoSemana, totalEnRango } from './gastos';
 import { getSetting } from './queries';
+import { transaccion } from './tx';
 
 export type AvisoGuardado = {
   id: number;
@@ -37,18 +38,26 @@ function notaDe(a: Pick<AvisoGuardado, 'comercio' | 'pkg'>) {
  * Guarda los avisos nuevos y, si el modo es "anotar solo", crea los gastos.
  * Las transferencias siempre quedan para revisar (pueden no ser gastos).
  */
-export async function procesarAvisos(db: SQLiteDatabase, avisos: AvisoBanco[]): Promise<{ agregados: number; pendientes: number }> {
-  const modo = await modoGastosAuto(db);
-  let agregados = 0;
-  let pendientes = 0;
-  for (const a of avisos) {
-    if (!a?.pkg || !esAppDeBanco(a.pkg)) continue;
-    const r = interpretarAviso(a);
-    const monto = r.tipo === 'ignorar' ? null : r.monto;
-    const comercio = r.tipo === 'ignorar' ? null : r.comercio;
-    const categoria = r.tipo === 'ignorar' ? null : r.categoria;
-    const estado = r.tipo === 'ignorar' ? 'ignorado' : r.tipo === 'compra' && modo === 'auto' ? 'agregado' : 'pendiente';
-    const ins = await db.runAsync(
+export type ResultadoAvisos = {
+  agregados: number;
+  pendientes: number;
+  /** Avisos que ya quedaron guardados (o que se descartan por no ser de un banco): se pueden quitar de la cola. */
+  procesados: AvisoBanco[];
+  /** Avisos que fallaron al guardarse: se quedan en la cola para reintentar. */
+  fallidos: number;
+};
+
+/** Guarda UN aviso (y su gasto, si corresponde) en una sola transacción: queda todo o nada. */
+async function guardarAviso(db: SQLiteDatabase, a: AvisoBanco, modo: ModoAuto): Promise<'agregado' | 'pendiente' | 'otro'> {
+  const r = interpretarAviso(a);
+  const monto = r.tipo === 'ignorar' ? null : r.monto;
+  const comercio = r.tipo === 'ignorar' ? null : r.comercio;
+  const categoria = r.tipo === 'ignorar' ? null : r.categoria;
+  const estado = r.tipo === 'ignorar' ? 'ignorado' : r.tipo === 'compra' && modo === 'auto' ? 'agregado' : 'pendiente';
+  return transaccion(db, async (tx) => {
+    // UNIQUE(pkg, ts, text): el mismo aviso leído dos veces (reintento) no se duplica.
+    // Dos compras iguales de verdad tienen distinta hora (ts), así que se guardan las dos.
+    const ins = await tx.runAsync(
       `INSERT OR IGNORE INTO bank_alerts (pkg, title, text, ts, tipo, monto, comercio, categoria, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       a.pkg,
       a.title ?? '',
@@ -60,14 +69,41 @@ export async function procesarAvisos(db: SQLiteDatabase, avisos: AvisoBanco[]): 
       categoria,
       estado,
     );
-    if (!ins.changes) continue; // ya lo habíamos visto
+    if (!ins.changes) return 'otro'; // ya lo habíamos guardado antes
     if (estado === 'agregado' && monto) {
-      const gid = await crearGasto(db, { amount: monto, category: categoria ?? 'otros', note: notaDe({ comercio, pkg: a.pkg }), date: toISODate(new Date(a.ts)) });
-      await db.runAsync('UPDATE bank_alerts SET expense_id = ? WHERE id = ?', gid, ins.lastInsertRowId);
-      agregados++;
-    } else if (estado === 'pendiente') pendientes++;
+      const gid = await crearGasto(tx, { amount: monto, category: categoria ?? 'otros', note: notaDe({ comercio, pkg: a.pkg }), date: toISODate(new Date(a.ts)) });
+      await tx.runAsync('UPDATE bank_alerts SET expense_id = ? WHERE id = ?', gid, ins.lastInsertRowId);
+      return 'agregado';
+    }
+    return estado === 'pendiente' ? 'pendiente' : 'otro';
+  });
+}
+
+/**
+ * Guarda los avisos nuevos y, si el modo es "anotar solo", crea los gastos.
+ * Las transferencias siempre quedan para revisar (pueden no ser gastos).
+ * Cada aviso se guarda por separado: si uno falla, los demás no se pierden.
+ */
+export async function procesarAvisos(db: SQLiteDatabase, avisos: AvisoBanco[]): Promise<ResultadoAvisos> {
+  const modo = await modoGastosAuto(db);
+  const res: ResultadoAvisos = { agregados: 0, pendientes: 0, procesados: [], fallidos: 0 };
+  for (const a of avisos) {
+    const valido = a && typeof a.pkg === 'string' && typeof a.ts === 'number' && Number.isFinite(a.ts);
+    if (!valido || !esAppDeBanco(a.pkg)) {
+      if (a) res.procesados.push(a); // basura o no es de un banco: se quita de la cola
+      continue;
+    }
+    try {
+      const r = await guardarAviso(db, a, modo);
+      if (r === 'agregado') res.agregados++;
+      else if (r === 'pendiente') res.pendientes++;
+      res.procesados.push(a);
+    } catch (e) {
+      console.warn('No se pudo guardar un aviso del banco (se reintenta después)', e);
+      res.fallidos++;
+    }
   }
-  return { agregados, pendientes };
+  return res;
 }
 
 export async function listarAvisos(db: SQLiteDatabase, estados: AvisoGuardado['estado'][], limite = 50): Promise<AvisoGuardado[]> {
@@ -83,16 +119,29 @@ export async function contarAvisosPendientes(db: SQLiteDatabase): Promise<number
 }
 
 /** Convierte un aviso pendiente en gasto. */
+/**
+ * Convierte un aviso en gasto. Es seguro tocar dos veces: el aviso se "reclama" primero
+ * (solo si aún no estaba agregado) y el gasto se crea en la MISMA transacción.
+ */
 export async function aceptarAviso(db: SQLiteDatabase, id: number, categoria?: string): Promise<number | null> {
-  const a = await db.getFirstAsync<AvisoGuardado>('SELECT * FROM bank_alerts WHERE id = ?', id);
-  if (!a || !a.monto || a.estado === 'agregado') return null;
-  const gid = await crearGasto(db, { amount: a.monto, category: categoria ?? a.categoria ?? 'otros', note: notaDe(a), date: toISODate(new Date(a.ts)) });
-  await db.runAsync("UPDATE bank_alerts SET estado = 'agregado', expense_id = ?, categoria = ? WHERE id = ?", gid, categoria ?? a.categoria, id);
-  return gid;
+  return transaccion(db, async (tx) => {
+    const reclamo = await tx.runAsync(
+      "UPDATE bank_alerts SET estado = 'agregado' WHERE id = ? AND estado != 'agregado' AND monto > 0",
+      id,
+    );
+    if (!reclamo.changes) return null; // ya estaba agregado (doble toque) o no tiene monto
+    const a = await tx.getFirstAsync<AvisoGuardado>('SELECT * FROM bank_alerts WHERE id = ?', id);
+    if (!a?.monto) throw new Error('Aviso sin monto');
+    const cat = categoria ?? a.categoria ?? 'otros';
+    const gid = await crearGasto(tx, { amount: a.monto, category: cat, note: notaDe(a), date: toISODate(new Date(a.ts)) });
+    await tx.runAsync('UPDATE bank_alerts SET expense_id = ?, categoria = ? WHERE id = ?', gid, cat, id);
+    return gid;
+  });
 }
 
+/** Descarta un aviso pendiente (uno ya convertido en gasto no se toca). */
 export async function descartarAviso(db: SQLiteDatabase, id: number) {
-  await db.runAsync("UPDATE bank_alerts SET estado = 'descartado' WHERE id = ?", id);
+  await db.runAsync("UPDATE bank_alerts SET estado = 'descartado' WHERE id = ? AND estado != 'agregado'", id);
 }
 
 // ---------- Proyección ----------

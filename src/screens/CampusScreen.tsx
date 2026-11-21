@@ -127,7 +127,7 @@ export function CampusScreen() {
           <View style={{ flex: 1 }}>
             <AppText variant="headline">{activa ? 'Activada' : 'Desactivada'}</AppText>
             <AppText variant="caption" tone="secondary">
-              Cuando llegas a la U en horario de clase, marco "fui". Si no te detecto, al terminar la clase te pregunto "¿fuiste?".
+              Cuando llegas a la U en horario de clase, marco “fui”. Si no te detecto, al terminar la clase te pregunto “¿fuiste?”.
             </AppText>
           </View>
         </Card>
@@ -169,11 +169,11 @@ export function CampusScreen() {
           )}
           {activa && !fondo ? (
             <AppText variant="caption" tone="warning" style={{ marginTop: space.sm }}>
-              Falta "Permitir todo el tiempo" en la ubicación: sin eso solo funciona con la app abierta.
+              Falta “Permitir todo el tiempo” en la ubicación: sin eso solo funciona con la app abierta.
             </AppText>
           ) : (
             <AppText variant="caption" tone="tertiary" style={{ marginTop: space.sm }}>
-              Android pedirá ubicación "Permitir todo el tiempo". Solo se usa para saber si entras o sales de la U (gasta muy poca batería).
+              Android pedirá ubicación “Permitir todo el tiempo”. Solo se usa para saber si entras o sales de la U (gasta muy poca batería).
             </AppText>
           )}
         </View>

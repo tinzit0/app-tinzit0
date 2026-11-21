@@ -24,10 +24,11 @@ import {
   rangoSemana,
   totalEnRango,
 } from '@/database/gastos';
+import { hayGastoParecido } from '@/database/presupuestos';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fonts, radius, space } from '@/theme/tokens';
 import { CATEGORIAS } from '@/utils/categorias';
-import { fechaLarga, fromISODate, toISODate } from '@/utils/fechas';
+import { fechaCorta, fechaLarga, fromISODate, haceDias, toISODate } from '@/utils/fechas';
 import { formatCLP } from '@/utils/moneda';
 import { soloDigitos } from '@/utils/montos';
 
@@ -40,20 +41,13 @@ export function GastoFormScreen() {
   const params = useLocalSearchParams<{ id?: string; monto?: string; cat?: string; nota?: string; fecha?: string }>();
   const id = params.id ? Number(params.id) : null;
 
-  const [digitos, setDigitos] = useState(''); // el monto como texto de solo números
-  const [cat, setCat] = useState('comida');
-  const [nota, setNota] = useState('');
-  const [fecha, setFecha] = useState(toISODate());
+  // Pre-llenado (ej: desde una boleta escaneada) como valor inicial.
+  const pre = !id;
+  const [digitos, setDigitos] = useState(() => (pre && params.monto && /^\d+$/.test(params.monto) ? params.monto : '')); // el monto como texto de solo números
+  const [cat, setCat] = useState(() => (pre && params.cat ? params.cat : 'comida'));
+  const [nota, setNota] = useState(() => (pre && params.nota ? params.nota : ''));
+  const [fecha, setFecha] = useState(() => (pre && params.fecha && /^\d{4}-\d{2}-\d{2}$/.test(params.fecha) ? params.fecha : toISODate()));
   const [guardando, setGuardando] = useState(false);
-
-  // Pre-llenado (ej: desde una boleta escaneada)
-  useEffect(() => {
-    if (id) return;
-    if (params.monto && /^\d+$/.test(params.monto)) setDigitos(params.monto);
-    if (params.cat) setCat(params.cat);
-    if (params.nota) setNota(params.nota);
-    if (params.fecha && /^\d{4}-\d{2}-\d{2}$/.test(params.fecha)) setFecha(params.fecha);
-  }, [id, params.monto, params.cat, params.nota, params.fecha]);
 
   useEffect(() => {
     if (!id) return;
@@ -68,7 +62,7 @@ export function GastoFormScreen() {
 
   const monto = Number(digitos || 0);
   const hoy = toISODate();
-  const ayer = toISODate(new Date(Date.now() - 86400000));
+  const ayer = toISODate(haceDias(1));
 
   const elegirFecha = () => {
     if (Platform.OS !== 'android') return;
@@ -78,6 +72,26 @@ export function GastoFormScreen() {
       maximumDate: new Date(),
       onChange: (e, d) => e.type === 'set' && d && setFecha(toISODate(d)),
     });
+  };
+
+  /** Antes de anotar uno nuevo: ¿ya hay uno igual (mismo monto, ±1 día)? Puede venir del banco o una boleta. */
+  const intentarGuardar = async () => {
+    if (monto <= 0 || guardando) return;
+    if (!id) {
+      const parecido = await hayGastoParecido(db, monto, fecha).catch(() => null);
+      if (parecido) {
+        Alert.alert(
+          '¿Ya lo anotaste?',
+          `Hay un gasto de ${formatCLP(parecido.amount)} el ${fechaCorta(fromISODate(parecido.date))}${parecido.note ? ` (${parecido.note})` : ''}. Puede venir del banco o de una boleta.`,
+          [
+            { text: 'No anotar', style: 'cancel' },
+            { text: 'Anotar igual', onPress: () => guardar().catch(console.warn) },
+          ],
+        );
+        return;
+      }
+    }
+    await guardar();
   };
 
   const guardar = async () => {
@@ -98,6 +112,8 @@ export function GastoFormScreen() {
         if (aviso) Alert.alert('Presupuesto', aviso);
       }
       cerrar();
+    } catch (e) {
+      Alert.alert('No se pudo guardar', e instanceof Error ? e.message : 'Inténtalo de nuevo.');
     } finally {
       setGuardando(false);
     }
@@ -200,7 +216,7 @@ export function GastoFormScreen() {
         </View>
 
         <View style={[styles.section, { gap: space.md }]}>
-          <Button label={id ? 'Guardar cambios' : 'Anotar gasto'} onPress={guardar} disabled={monto <= 0} loading={guardando} />
+          <Button label={id ? 'Guardar cambios' : 'Anotar gasto'} onPress={intentarGuardar} disabled={monto <= 0} loading={guardando} />
           {id ? <Button label="Eliminar" variant="danger" onPress={borrar} /> : null}
         </View>
       </ScrollView>

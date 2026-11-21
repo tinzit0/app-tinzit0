@@ -45,9 +45,13 @@ export function HabitosScreen() {
 
   const toggle = async (h: HabitoConEstado) => {
     if (!h.hechoHoy) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    await alternarHabito(db, h.id, !h.hechoHoy);
-    await cargar();
-    revisar(true);
+    try {
+      await alternarHabito(db, h.id, !h.hechoHoy);
+      revisar(true);
+    } catch (e) {
+      console.warn(e);
+    }
+    await cargar().catch(console.warn);
   };
 
   return (

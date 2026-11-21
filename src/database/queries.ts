@@ -69,3 +69,19 @@ export async function getResumenHoy(db: SQLiteDatabase): Promise<ResumenHoy> {
     presupuestoSemana: presupuesto,
   };
 }
+
+/**
+ * ¿Mostrar la configuración inicial? Solo una vez y solo si la app está vacía.
+ * Quien ya usaba la app (tiene datos o nombre) no la ve: se marca como hecha.
+ */
+export async function debeMostrarBienvenida(db: SQLiteDatabase): Promise<boolean> {
+  if ((await getSetting(db, 'bienvenida')) === '1') return false;
+  const r = await db.getFirstAsync<{ n: number }>(
+    'SELECT (SELECT COUNT(*) FROM tasks) + (SELECT COUNT(*) FROM expenses) + (SELECT COUNT(*) FROM notes) + (SELECT COUNT(*) FROM habits) AS n',
+  );
+  if ((r?.n ?? 0) > 0 || (await getSetting(db, 'nombre'))) {
+    await setSetting(db, 'bienvenida', '1');
+    return false;
+  }
+  return true;
+}

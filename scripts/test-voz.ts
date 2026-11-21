@@ -7,6 +7,8 @@ import { interpretar } from '../src/voice/interpretar';
 import { detectarActivacion } from '../src/voice/texto';
 import { responder } from '../src/voice/ejecutar';
 import { crearDbPrueba } from './db-prueba';
+import { aplicarEstilo } from '../src/jarvis/persona';
+import { leerLlamadas } from '../src/ia/parser';
 
 const casos: [string, string, Record<string, unknown>?][] = [
   ['¿Qué tareas me faltan hoy?', 'tareas_hoy'],
@@ -145,7 +147,8 @@ const pruebas2: [string, string][] = [
   ['abona 10 lucas a mi meta', 'Abonado $10.000'],
   ['cambia mi presupuesto a 120 lucas', '$120.000'],
   ['cuánto he gastado en comida este mes', 'En comida llevas $5.000'],
-  ['borra el último gasto', 'Borré el último gasto: $5.000'],
+  // Borrar pide confirmación en pantalla (no borra al tiro).
+  ['borra el último gasto', '¿Borro tu último gasto?'],
   ['pasa la tarea comprar pan para el viernes', 'Pasé "Comprar pan"'],
   ['recuérdame en 20 minutos sacar la ropa', 'en 20 minutos'],
   ['abre whatsapp', 'Abriendo WhatsApp'],
@@ -158,16 +161,18 @@ for (const [frase, debe] of pruebas2) {
   if (r.texto.includes(debe)) ok++;
   else console.error('❌ respuesta', frase, '→', r.texto, '— esperaba', debe);
 }
+// Con el Sí del usuario, ahora sí borra.
+const conf = await responder(db, 'borra el último gasto', {}, { confirmado: true });
+if (conf.texto.includes('Borré el último gasto: $5.000')) ok++; else console.error('❌ borrar confirmado', conf.texto);
 const acc = await responder(db, 'recuérdame en 20 minutos sacar la ropa');
 if (acc.accion?.tipo === 'recordatorio' && acc.accion.segundos === 1200) ok++; else console.error('❌ acción recordatorio', acc);
-const total = casos.length + wake.length + 7 + seg.length + pruebas2.length + 1;
+const total = casos.length + wake.length + 7 + seg.length + pruebas2.length + 2;
 console.log(ok === total ? `✅ Asistente: ${ok}/${total} frases entendidas` : `⚠️ ${ok}/${total}`);
 if (ok !== total) process.exit(1);
 })();
 
 
 // Personalidad Jarvis
-import { aplicarEstilo } from '../src/jarvis/persona';
 {
   const r1 = aplicarEstilo({ texto: 'Listo, anoté "Pan" para mañana ✅', intencion: 'agregar_tarea' }, 'jarvis', 'señor');
   const r2 = aplicarEstilo({ texto: 'Uy, eso no lo cacho todavía 😅 Puedes pedirme cosas como: x', intencion: 'desconocido' }, 'jarvis', 'señor');
@@ -270,7 +275,6 @@ import { aplicarEstilo } from '../src/jarvis/persona';
 })();
 
 // Lector de llamadas a herramientas de la IA
-import { leerLlamadas } from '../src/ia/parser';
 {
   const a = leerLlamadas('<tool_call>\n{"name": "ejecutar_comando", "arguments": {"comando": "anota un gasto de 5000 en comida"}}\n</tool_call>');
   const b = leerLlamadas('<think>pienso…</think>{"name":"ejecutar_comando","arguments":"{\\"comando\\":\\"mis tareas\\"}"}');

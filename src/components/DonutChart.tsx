@@ -40,12 +40,10 @@ export function DonutChart({ datos, size = 168 }: Props) {
   const c = size / 2;
   const gap = lista.length > 1 ? 2 / r : 0; // 2px de separación, en radianes
 
-  let a = -Math.PI / 2;
-  const segmentos = lista.map((d) => {
-    const ang = (d.total / total) * Math.PI * 2;
-    const seg = { ...d, a0: a + gap / 2, a1: a + ang - gap / 2 };
-    a += ang;
-    return seg;
+  const angulos = lista.map((d) => (d.total / total) * Math.PI * 2);
+  const segmentos = lista.map((d, k) => {
+    const inicio = -Math.PI / 2 + angulos.slice(0, k).reduce((s, x) => s + x, 0);
+    return { ...d, a0: inicio + gap / 2, a1: inicio + angulos[k] - gap / 2 };
   });
 
   const destacada = lista.find((d) => d.category === activa);

@@ -28,7 +28,22 @@ export function SpotifySettings() {
   };
 
   useEffect(() => {
-    if (Platform.OS !== 'web') cargar().catch(console.warn);
+    if (Platform.OS === 'web') return;
+    let vivo = true;
+    Promise.all([sp.conectado(), sp.obtenerClientId()])
+      .then(([c, id]) => {
+        if (!vivo) return;
+        setConectado(c);
+        setClientId(id ?? '');
+        if (c)
+          sp.esPremium()
+            .then((x) => vivo && setPremium(x))
+            .catch(() => vivo && setPremium(null));
+      })
+      .catch(console.warn);
+    return () => {
+      vivo = false;
+    };
   }, []);
 
   const conectar = async () => {
@@ -77,13 +92,13 @@ export function SpotifySettings() {
   return (
     <View style={{ gap: space.sm }}>
       <AppText variant="caption" tone="secondary">
-        Sin conectar nada ya puedes decir "pon Bad Bunny" y Spotify lo reproduce. Conecta tu cuenta (gratis) para ver lo que suena, buscar y
+        Sin conectar nada ya puedes decir “pon Bad Bunny” y Spotify lo reproduce. Conecta tu cuenta (gratis) para ver lo que suena, buscar y
         controlar desde Tinzit0:
       </AppText>
-      <AppText variant="caption" tone="tertiary">1. Entra a developer.spotify.com con tu cuenta de Spotify y toca "Create app".</AppText>
-      <AppText variant="caption" tone="tertiary">2. Marca "Web API" y en "Redirect URIs" agrega exactamente:</AppText>
+      <AppText variant="caption" tone="tertiary">1. Entra a developer.spotify.com con tu cuenta de Spotify y toca “Create app”.</AppText>
+      <AppText variant="caption" tone="tertiary">2. Marca “Web API” y en “Redirect URIs” agrega exactamente:</AppText>
       <AppText variant="callout" selectable style={[styles.uri, { backgroundColor: colors.surfaceRaised }]}>{sp.REDIRECT_URI}</AppText>
-      <AppText variant="caption" tone="tertiary">3. Guarda, copia el "Client ID" y pégalo aquí:</AppText>
+      <AppText variant="caption" tone="tertiary">3. Guarda, copia el “Client ID” y pégalo aquí:</AppText>
       <TextInput
         value={clientId}
         onChangeText={setClientId}

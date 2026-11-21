@@ -36,12 +36,21 @@ export function NotasScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      // Si escribes rápido, una búsqueda antigua que termine tarde no pisa a la nueva.
+      let vigente = true;
       listarNotas(db, busqueda)
         .then((n) => {
+          if (!vigente) return;
           setNotas(n);
           setCargado(true);
         })
-        .catch(console.warn);
+        .catch((e) => {
+          console.warn(e);
+          if (vigente) setCargado(true);
+        });
+      return () => {
+        vigente = false;
+      };
     }, [db, busqueda]),
   );
 

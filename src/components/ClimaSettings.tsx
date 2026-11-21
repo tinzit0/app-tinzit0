@@ -4,7 +4,7 @@
  */
 import * as Location from 'expo-location';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { buscarCiudades, guardarUbicacion, obtenerUbicacion, UBICACION_DEFECTO, type Ubicacion } from '@/clima/clima';
@@ -32,11 +32,14 @@ export function ClimaSettings() {
     setBusqueda('');
   };
 
+  const pedido = useRef(0);
   const buscar = async () => {
     if (busqueda.trim().length < 2) return;
+    const mio = ++pedido.current; // solo vale la última búsqueda
     setOcupado(true);
     try {
       const r = await buscarCiudades(busqueda.trim());
+      if (mio !== pedido.current) return;
       setResultados(r);
       if (!r.length) Alert.alert('Sin resultados', 'No encontré esa ciudad. Prueba con otro nombre.');
     } catch {

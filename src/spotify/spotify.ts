@@ -19,6 +19,7 @@ import * as AuthSession from 'expo-auth-session';
 import * as IntentLauncher from 'expo-intent-launcher';
 import * as SecureStore from 'expo-secure-store';
 import * as WebBrowser from 'expo-web-browser';
+import { fetchConLimite } from '@/utils/red';
 import { Linking, Platform } from 'react-native';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -170,7 +171,7 @@ async function api<T>(ruta: string, init: RequestInit = {}): Promise<T | null> {
   if (!token) throw new ErrorSpotify('sin_cuenta', 'Conecta tu cuenta de Spotify en Ajustes.');
   let r: Response;
   try {
-    r = await fetch(`${API}${ruta}`, { ...init, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(init.headers ?? {}) } });
+    r = await fetchConLimite(`${API}${ruta}`, { ...init, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(init.headers ?? {}) } });
   } catch {
     throw new ErrorSpotify('red', 'Sin conexión con Spotify.');
   }

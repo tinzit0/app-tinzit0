@@ -34,6 +34,8 @@ class AvisosService : NotificationListenerService() {
         .put("title", titulo)
         .put("text", texto)
         .put("ts", sbn.postTime)
+        // Identifica la notificación: si el banco la vuelve a publicar (actualización), no es otra compra.
+        .put("key", sbn.key ?: "")
       if (guardar(ctx, aviso)) AvisosModule.emitir(aviso.toString())
     } catch (e: Exception) {
       // Nunca botar el servicio por un aviso raro.
@@ -67,14 +69,21 @@ class AvisosService : NotificationListenerService() {
       return paquetes(ctx).any { p.contains(it) }
     }
 
-    /** Agrega a la cola (sin duplicados: mismo banco y mismo texto en menos de 2 minutos). */
+    /**
+     * Agrega a la cola. Solo se descarta si es la MISMA notificación publicada de nuevo
+     * (misma "key" de Android, mismo texto, menos de 2 minutos). Dos compras iguales de verdad
+     * llegan como notificaciones distintas y se guardan las dos.
+     */
     @Synchronized
     fun guardar(ctx: Context, aviso: JSONObject): Boolean {
       val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
       val cola = try { JSONArray(prefs.getString(COLA, "[]")) } catch (e: Exception) { JSONArray() }
+      val key = aviso.optString("key")
       for (i in 0 until cola.length()) {
         val o = cola.optJSONObject(i) ?: continue
-        if (o.optString("pkg") == aviso.optString("pkg") &&
+        if (key.isNotEmpty() &&
+          o.optString("key") == key &&
+          o.optString("pkg") == aviso.optString("pkg") &&
           o.optString("text") == aviso.optString("text") &&
           o.optString("title") == aviso.optString("title") &&
           Math.abs(o.optLong("ts") - aviso.optLong("ts")) < 120_000
@@ -90,6 +99,35 @@ class AvisosService : NotificationListenerService() {
 
     @Synchronized
     fun leer(ctx: Context): String = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(COLA, "[]") ?: "[]"
+
+    /**
+     * Quita de la cola SOLO los avisos que la app ya guardó (mismo banco, hora y texto).
+     * Si llegó un aviso nuevo mientras la app procesaba, ese se queda para la próxima vez.
+     */
+    @Synchronized
+    fun confirmar(ctx: Context, procesados: String): Int {
+      val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+      val cola = try { JSONArray(prefs.getString(COLA, "[]")) } catch (e: Exception) { JSONArray() }
+      val listos = try { JSONArray(procesados) } catch (e: Exception) { JSONArray() }
+      val claves = HashSet<String>()
+      for (i in 0 until listos.length()) {
+        val o = listos.optJSONObject(i) ?: continue
+        claves.add(o.optString("pkg") + "|" + o.optLong("ts") + "|" + o.optString("title") + "|" + o.optString("text"))
+      }
+      val quedan = JSONArray()
+      var quitados = 0
+      for (i in 0 until cola.length()) {
+        val o = cola.optJSONObject(i)
+        if (o != null && claves.contains(o.optString("pkg") + "|" + o.optLong("ts") + "|" + o.optString("title") + "|" + o.optString("text"))) {
+          quitados++
+        } else {
+          quedan.put(cola.get(i))
+        }
+      }
+      // commit() (y no apply()) para que quede escrito antes de seguir.
+      prefs.edit().putString(COLA, quedan.toString()).commit()
+      return quitados
+    }
 
     @Synchronized
     fun vaciar(ctx: Context) {

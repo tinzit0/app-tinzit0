@@ -7,6 +7,9 @@
  * - Android corta el dictado cada cierto rato: lo reiniciamos solo, sin perder lo anterior.
  * - La pantalla queda encendida mientras graba (si se apaga, Android detiene el micrófono).
  * - Se pausa el "ey Tinzit0" para que no compitan por el micrófono.
+ * - IMPORTANTE: es una TRANSCRIPCIÓN (texto). El audio no se graba ni se guarda.
+ * - Borrador: lo transcrito se guarda solo cada pocos segundos y al salir/cerrar la app.
+ *   Si la app se cierra, al volver te ofrece recuperarlo.
  */
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
@@ -14,7 +17,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { Stack, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useRef, useState, type ComponentRef } from 'react';
-import { Alert, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, AppState, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
@@ -23,6 +26,7 @@ import { Chip } from '@/components/Chip';
 import { PressableScale } from '@/components/PressableScale';
 import { crearTarjetas, listarRamosSimple, type Ramo } from '@/database/estudio';
 import { guardarNota } from '@/database/notas';
+import { getSetting, setSetting } from '@/database/queries';
 import { resumenConIA, tarjetasConIA } from '@/estudio/conIA';
 import { palabrasClave } from '@/estudio/logica';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -30,6 +34,9 @@ import { radius, space, type } from '@/theme/tokens';
 import { fechaLarga } from '@/utils/fechas';
 import { escuchar, pedirPermisoMicrofono, vozDisponible, type Escucha } from '@/voice/reconocedor';
 import { useVoz } from '@/voice/VozProvider';
+
+const CLAVE_BORRADOR = 'borrador_clase';
+type Borrador = { texto: string; segundos: number; ramo: number | null; fecha: string };
 
 const reloj = (s: number) => `${Math.floor(s / 3600) ? `${Math.floor(s / 3600)}:` : ''}${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 
@@ -47,6 +54,12 @@ export function GrabarClaseScreen() {
   const [segundos, setSegundos] = useState(0);
   const [resumen, setResumen] = useState<string[] | null>(null);
   const [ocupado, setOcupado] = useState<'resumen' | 'tarjetas' | null>(null);
+  const [borrador, setBorrador] = useState<Borrador | null>(null);
+  const notaId = useRef<number | null>(null); // al guardar dos veces, se actualiza la misma nota
+  const estadoRef = useRef({ texto: '', segundos: 0, ramo: null as number | null });
+  useEffect(() => {
+    estadoRef.current = { texto, segundos, ramo };
+  }, [texto, segundos, ramo]);
 
   const grabandoRef = useRef(false);
   const escucha = useRef<Escucha | null>(null);
@@ -57,7 +70,49 @@ export function GrabarClaseScreen() {
 
   useEffect(() => {
     listarRamosSimple(db).then(setRamos).catch(console.warn);
+    // ¿Quedó una transcripción sin guardar la vez pasada?
+    getSetting(db, CLAVE_BORRADOR)
+      .then((raw) => {
+        if (!raw) return;
+        const b = JSON.parse(raw) as Borrador;
+        if (b?.texto?.trim()) setBorrador(b);
+      })
+      .catch(() => {});
   }, [db]);
+
+  // Guardar el borrador (cada 5 s mientras cambia, y al salir o mandar la app al fondo).
+  const guardarBorrador = useRef(async () => {
+    const e = estadoRef.current;
+    if (!e.texto.trim()) return;
+    const b: Borrador = { texto: e.texto, segundos: e.segundos, ramo: e.ramo, fecha: new Date().toISOString() };
+    await setSetting(db, CLAVE_BORRADOR, JSON.stringify(b));
+  });
+  useEffect(() => {
+    if (!texto.trim()) return;
+    const t = setTimeout(() => {
+      guardarBorrador.current().catch(console.warn);
+    }, 5000);
+    return () => clearTimeout(t);
+  }, [texto]);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (e) => {
+      if (e !== 'active') guardarBorrador.current().catch(console.warn);
+    });
+    return () => sub.remove();
+  }, []);
+
+  const recuperarBorrador = () => {
+    if (!borrador) return;
+    setTexto(borrador.texto);
+    setSegundos(borrador.segundos);
+    acumulado.current = borrador.segundos;
+    if (borrador.ramo) setRamo(borrador.ramo);
+    setBorrador(null);
+  };
+  const descartarBorrador = () => {
+    setBorrador(null);
+    setSetting(db, CLAVE_BORRADOR, '').catch(console.warn);
+  };
 
   // Reloj de la grabación
   useEffect(() => {
@@ -66,9 +121,10 @@ export function GrabarClaseScreen() {
     return () => clearInterval(i);
   }, [grabando]);
 
-  // Al salir de la pantalla: cortar todo
+  // Al salir de la pantalla: guardar el borrador y cortar todo
   useEffect(
     () => () => {
+      guardarBorrador.current().catch(console.warn);
       grabandoRef.current = false;
       escucha.current?.cancelar();
       deactivateKeepAwake('grabar');
@@ -153,7 +209,13 @@ export function GrabarClaseScreen() {
     const claves = palabrasClave(texto, 3);
     const titulo = `📚 Clase${nombreRamo ? ` de ${nombreRamo}` : ''} · ${fechaLarga()}${claves.length ? ` (${claves.join(', ')})` : ''}`;
     const cuerpo = [titulo, resumen?.length ? `\nResumen:\n${resumen.map((p) => `- ${p}`).join('\n')}` : '', `\nTranscripción (${reloj(segundos)}):\n${texto}`].join('\n');
-    await guardarNota(db, null, cuerpo);
+    try {
+      notaId.current = await guardarNota(db, notaId.current, cuerpo);
+      await setSetting(db, CLAVE_BORRADOR, ''); // ya quedó en Notas
+    } catch {
+      Alert.alert('No se pudo guardar', 'Tu transcripción sigue aquí (y como borrador). Inténtalo de nuevo.');
+      return;
+    }
     Alert.alert('Guardada en Notas ✓', 'La encuentras en la pestaña Notas.', [
       { text: 'Seguir aquí', style: 'cancel' },
       { text: 'Ver notas', onPress: () => router.navigate('/notas') },
@@ -190,6 +252,19 @@ export function GrabarClaseScreen() {
             {ramos.map((r) => (
               <Chip key={r.id} compact label={r.name} selected={ramo === r.id} onPress={() => setRamo(ramo === r.id ? null : r.id)} leading={<View style={[styles.punto, { backgroundColor: r.color }]} />} />
             ))}
+          </View>
+        ) : null}
+
+        {borrador && !texto ? (
+          <View style={[styles.caja, { borderColor: colors.accent, backgroundColor: colors.accentSoft, minHeight: 0, marginTop: space.lg, gap: space.sm }]}>
+            <AppText variant="headline">Tienes una transcripción sin guardar</AppText>
+            <AppText variant="caption" tone="secondary" numberOfLines={2}>
+              {reloj(borrador.segundos)} · {borrador.texto.slice(0, 120)}
+            </AppText>
+            <View style={[styles.wrap, { marginTop: space.sm }]}>
+              <Chip label="Recuperar" selected onPress={recuperarBorrador} />
+              <Chip label="Descartar" onPress={descartarBorrador} />
+            </View>
           </View>
         ) : null}
 
@@ -257,6 +332,8 @@ export function GrabarClaseScreen() {
                     text: 'Borrar',
                     style: 'destructive',
                     onPress: () => {
+                      setSetting(db, CLAVE_BORRADOR, '').catch(console.warn);
+                      notaId.current = null;
                       setTexto('');
                       setResumen(null);
                       setSegundos(0);
@@ -271,7 +348,7 @@ export function GrabarClaseScreen() {
         ) : null}
 
         <AppText variant="caption" tone="tertiary" style={{ marginTop: space.xl }}>
-          Usa el dictado de Google del celular. Para que funcione sin internet, descarga el español en Ajustes del celular → Google → Voz → Reconocimiento sin conexión.
+          Esto es una transcripción: se guarda el TEXTO, no el audio. Usa el dictado del celular (si el español está descargado en Ajustes → Google → Voz → Reconocimiento sin conexión, no necesita internet). Lo transcrito se guarda como borrador por si la app se cierra.
         </AppText>
       </ScrollView>
     </View>

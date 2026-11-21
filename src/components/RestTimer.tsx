@@ -5,18 +5,25 @@
  * - Al terminar: vibración + una notificación con sonido. La notificación
  *   también suena si saliste de la app (por ejemplo, para cambiar la música).
  * La barra se anima en el hilo de UI (Reanimated), así no se traba.
+ * El descanso en curso se GUARDA (hora de término y su alarma): si sales de la pantalla
+ * la alarma sigue y al volver el contador continúa donde iba.
  */
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import * as Notifications from 'expo-notifications';
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { useSQLiteContext } from 'expo-sqlite';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { AppState, Platform, Pressable, StyleSheet, Vibration, View } from 'react-native';
 import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, space } from '@/theme/tokens';
 import { AppText } from './AppText';
+import { getSetting, setSetting } from '@/database/queries';
 import { Chip } from './Chip';
+
+const CLAVE = 'descanso_activo';
+type Guardado = { finEn: number; total: number; notifId: string | null };
 
 const OPCIONES = [60, 90, 120];
 
@@ -31,6 +38,7 @@ function mmss(s: number) {
 
 export const RestTimer = forwardRef<RestTimerHandle, Props>(function RestTimer({ segundos, onCambiarSegundos }, ref) {
   const { colors } = useTheme();
+  const db = useSQLiteContext();
   const [finEn, setFinEn] = useState<number | null>(null); // timestamp de término
   const [restante, setRestante] = useState(0);
   const notifId = useRef<string | null>(null);
@@ -41,29 +49,64 @@ export const RestTimer = forwardRef<RestTimerHandle, Props>(function RestTimer({
     notifId.current = null;
   };
 
+  const guardar = useCallback(
+    (g: Guardado | null) => {
+      setSetting(db, CLAVE, g ? JSON.stringify(g) : '').catch(() => {});
+    },
+    [db],
+  );
+
   const detener = () => {
     setFinEn(null);
     cancelAnimation(progreso);
     progreso.set(0);
     limpiarNotif();
+    guardar(null);
+  };
+
+  /** Muestra un descanso que termina en `fin` (sin tocar la alarma). */
+  const mostrar = (fin: number, total: number) => {
+    const resta = Math.max(0, fin - Date.now());
+    setFinEn(fin);
+    setRestante(Math.ceil(resta / 1000));
+    progreso.set(Math.min(1, resta / (total * 1000)));
+    progreso.set(withTiming(0, { duration: resta, easing: Easing.linear }));
   };
 
   const iniciar = (dur = segundos) => {
     limpiarNotif();
     const fin = Date.now() + dur * 1000;
-    setFinEn(fin);
-    setRestante(dur);
-    progreso.set(1);
-    progreso.set(withTiming(0, { duration: dur * 1000, easing: Easing.linear }));
+    mostrar(fin, dur);
+    guardar({ finEn: fin, total: dur, notifId: null });
     if (Platform.OS !== 'web') {
       Notifications.scheduleNotificationAsync({
         content: { title: 'Descanso listo ⏱️', body: 'A la siguiente serie, tú puedes 💪', sound: true, data: { tipo: 'descanso' } },
-        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: dur, channelId: 'tinzit0' },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(fin), channelId: 'tinzit0' },
       })
-        .then((id) => (notifId.current = id))
+        .then((id) => {
+          notifId.current = id;
+          guardar({ finEn: fin, total: dur, notifId: id });
+        })
         .catch(() => {});
     }
   };
+
+  // Al abrir: si había un descanso corriendo, se retoma (la alarma ya está agendada).
+  useEffect(() => {
+    getSetting(db, CLAVE)
+      .then((raw) => {
+        if (!raw) return;
+        const g = JSON.parse(raw) as Guardado;
+        if (typeof g?.finEn !== 'number' || g.finEn <= Date.now()) {
+          guardar(null);
+          return;
+        }
+        notifId.current = g.notifId;
+        mostrar(g.finEn, g.total);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [db]);
 
   const sumar = (s: number) => {
     if (!finEn) return;
@@ -88,14 +131,13 @@ export const RestTimer = forwardRef<RestTimerHandle, Props>(function RestTimer({
           Vibration.vibrate([0, 250, 120, 250]);
         }
         notifId.current = null;
+        guardar(null);
       }
     }, 250);
     return () => clearInterval(t);
-  }, [finEn]);
+  }, [finEn, guardar]);
 
-  // Si se desmonta la pantalla, cancelamos el aviso pendiente.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => () => limpiarNotif(), []);
+  // Al salir de la pantalla NO se cancela la alarma: el descanso sigue y al volver se retoma.
 
   const barra = useAnimatedStyle(() => ({ transform: [{ scaleX: progreso.get() }] }));
   const activo = finEn !== null;

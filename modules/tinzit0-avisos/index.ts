@@ -9,6 +9,9 @@ type Modulo = {
   abrirAjustesPermiso(): void;
   abrirInfoApp(): void;
   leerCola(): string;
+  /** Quita de la cola solo los avisos ya guardados. Devuelve cuántos quitó. */
+  confirmarCola(procesadosJson: string): number;
+  /** Borra toda la cola (solo para casos manuales; NO usar al sincronizar). */
   vaciarCola(): void;
   configurarPaquetes(lista: string[]): void;
   addListener(evento: 'onAviso', cb: (e: { json: string }) => void): EventSubscription;

@@ -21,9 +21,10 @@ App móvil **personal** (un solo usuario, Android) para organizar el día: tarea
 ```bash
 npx expo start            # dev server (Expo Go o development build)
 npx expo start --web      # vista previa en navegador (para revisar UI con Playwright)
-npm test                  # pruebas: base de datos (node:sqlite) + asistente + modo estudiante
+npm test                  # pruebas: base, asistente, estudio, finanzas, bienestar, integridad, privacidad, flujos, funciones
 npx tsx scripts/test-clima.ts  # prueba real contra Open-Meteo (necesita internet)
-npx tsc --noEmit          # chequeo de tipos
+npx tsc --noEmit          # chequeo de tipos (= npm run typecheck)
+npm run lint              # ESLint (eslint.config.js, base eslint-config-expo)
 npx expo-doctor           # salud de dependencias
 npx expo install <pkg>    # SIEMPRE así (no npm install) para versiones compatibles
 npx eas-cli build -p android --profile preview --non-interactive --no-wait   # APK instalable (cuenta EAS: tinzit0)
@@ -44,7 +45,7 @@ src/components/          UI reutilizable (Card, Chip, Button, Field, Fab, Pressa
                          DonutChart, Heatmap, MicOrb, RestTimer, LockGate, LogrosProvider, AppLifecycle…)
 src/database/            acceso a datos por módulo (tareas, gastos, fijos, metas, gym, cuerpo,
                          habitos, logros, notas, apps, respaldo, estadisticas, queries=settings)
-  schema.ts              MIGRACIONES versionadas con PRAGMA user_version (v1…v9)
+  schema.ts              MIGRACIONES versionadas con PRAGMA user_version (v1…v10)
 src/notifications/       mensajes.ts (personalidad) + programar.ts (agenda 7 días)
 src/voice/               texto.ts (normalizar, "ey Tinzit0"), interpretar.ts (NLU local, puro, ~40 intenciones + contexto),
                          ejecutar.ts (acciones + respuestas + historial; devuelve "accion" para la UI),
@@ -86,6 +87,10 @@ src/bienestar/            BIENESTAR / salud mental (habilidades DBT). logica.ts 
                          Pantallas: Bienestar, Calma ("Estoy a mil"), Impulso, TarjetaDiaria, Patrones, PlanCrisis, Habilidades.
                          SEGURIDAD: frases de hacerse daño → intención 'crisis' ANTES que todo (también antes de lo aprendido)
                          con *4141 / 131. No quitar. Textos de notificación discretos. Probado en scripts/test-bienestar.ts.
+src/inicio/               modulos.ts (Inicio configurable: ajuste inicio_modulos), funciones.ts (catálogo del buscador /buscar)
+src/finanzas/duplicados.ts  gastos posiblemente repetidos (mismo monto, ±1 día) + CSV; database/presupuestos.ts (category_budgets, v10)
+src/estudio/pomodoro.ts  sesión Pomodoro guardada (pomodoro_sesion) y bloque registrado una sola vez (registrarBloque)
+src/ia/seguridad.ts      valida lo que pide la IA; borrar o salir de la app vuelve como "confirmar" (Sí/No en pantalla)
 src/clima/clima.ts       Open-Meteo (sin key), caché 30 min en settings, Concepción por defecto
 src/widget/              datos.ts, ResumenWidget.tsx, lib.ts (carga segura), index.tsx
 src/theme/               tokens.ts, ThemeProvider.tsx (sistema/claro/oscuro)
@@ -100,6 +105,9 @@ docs/propuestas-icono.png  3 estilos de ícono (por defecto: 1 "Grafito + Lima")
 
 - **Migraciones**: nunca editar una existente; agregar una nueva al final de `MIGRATIONS`. Settings con `INSERT OR IGNORE`.
 - Toda consulta SQL vive en `src/database/*`, parametrizada. Fechas como texto `YYYY-MM-DD` en hora local.
+- **Atomicidad** (`src/database/tx.ts`): `transaccion(db, tx => …)` para todo lo que escribe varias filas relacionadas (usa una conexión escritora aparte con foreign_keys y busy_timeout; dentro usar SIEMPRE `tx` y no anidar). `enExclusiva(fn)` pone en fila las tareas de fondo (restaurar, avisos del banco, gastos fijos). Cada migración se confirma junto con su `user_version`.
+- **Respaldos**: validación en `respaldoFormato.ts` (puro), base de datos en `respaldoDatos.ts`, archivos en `respaldo.ts`. Nunca restaurar sin validar; antes se guarda una copia ("Recuperar datos de antes de importar"). `ultimo_respaldo` solo se marca si el guardado se confirmó.
+- **Avisos del banco**: la cola nativa se confirma por aviso (`confirmarCola`), nunca se vacía entera al sincronizar.
 - **Módulos nativos que no existen en Expo Go** (voz, widget) se cargan con `require` dentro de `try` (`reconocedor.ts`, `widget/lib.ts`). Mantener ese patrón: la app debe seguir abriendo en Expo Go.
 - Animaciones: Reanimated, solo `transform`/`opacity`, curva `Easing.bezier(0.23, 1, 0.32, 1)`, respetar "reducir movimiento". Sin animación en cambios de pestaña. Hápticos solo en eventos con significado.
 - Notificaciones: `reprogramarTodo` borra todo lo agendado **excepto** `data.tipo === 'descanso'` (temporizador).
@@ -125,9 +133,13 @@ pruebas con plan de estudio en Tareas, Pomodoro con lofi, tarjetas con repetici�
 escanear apuntes sin internet, resumen semanal por voz) · Gastos automáticos desde avisos del banco · Boletas escaneadas → gasto ·
 "Hoy puedes gastar" y proyección de fin de mes · Asistencia automática por ubicación de la U ·
 Bienestar (Estoy a mil, surfear impulso, tarjeta diaria DBT, patrones de ánimo, plan de crisis con *4141, habilidades,
-resumen para el psicólogo/a).
+resumen para el psicólogo/a) · Inicio configurable y configuración inicial · Buscador de funciones · Acceso rápido ·
+Presupuestos por categoría y CSV · Aviso de gastos repetidos · Hábitos por días · Respaldos validados con copia previa.
 
 ## Pendiente / ideas
+
+- Rutinas de gym con ejercicios, orden y series objetivo (hoy la rutina es solo un nombre por día).
+- Estudio por semestre y asistencia por bloque (hoy es por ramo y día).
 
 - Elegir estilo de ícono definitivo (ver `docs/propuestas-icono.png`).
 - Agregar la app del banco del usuario al catálogo de `src/utils/apps.ts` (+ `plugins/withAppQueries.js`).

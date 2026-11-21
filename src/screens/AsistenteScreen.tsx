@@ -45,7 +45,8 @@ import { Reactor, type EstadoReactor } from '@/jarvis/Reactor';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fonts } from '@/theme/tokens';
 import type { Sugerencia } from '@/voice/aprender';
-import { iaActivada, liberarIA, preguntarIA } from '@/ia/modelo';
+import { cancelarIA, iaActivada, liberarIA, preguntarIA } from '@/ia/modelo';
+import { normalizar } from '@/voice/texto';
 import { ejecutarAccion } from '@/voice/acciones';
 import { guardarMensaje, mensajesDeHoy, responder, type MensajeChat } from '@/voice/ejecutar';
 import { callar, configurarVoz, hablar } from '@/voice/hablar';
@@ -73,7 +74,7 @@ export function AsistenteScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { revisar } = useLogros();
-  const { pausarActivacion } = useVoz();
+  const { pausarActivacion, bloqueada } = useVoz();
   const params = useLocalSearchParams<{ auto?: string; comando?: string }>();
   const { setPreference } = useTheme();
   const vieneDeVoz = params.auto === '1' || !!params.comando;
@@ -81,7 +82,7 @@ export function AsistenteScreen() {
   // Preferencias
   const [color, setColor] = useState(colorHud(null));
   const [estilo, setEstilo] = useState<Estilo>('jarvis');
-  const [trato, setTrato] = useState('señor');
+  const [, setTrato] = useState('señor');
   const [conversacion, setConversacion] = useState(true);
   const prefs = useRef({ voz: true, estilo: 'jarvis' as Estilo, trato: 'señor', conversacion: true });
 
@@ -94,6 +95,11 @@ export function AsistenteScreen() {
   const [panel, setPanel] = useState<Panel | undefined>();
   const [sugerencias, setSugerencias] = useState<Sugerencia[]>([]);
   const duda = useRef<{ sugerencias: Sugerencia[]; pendiente: string } | null>(null);
+  // Acción que espera tu "Sí" (borrar datos, o algo que la IA quiere hacer fuera de la app).
+  const [porConfirmar, setPorConfirmar] = useState<{ pregunta: string; comando: string } | null>(null);
+  const confirmacion = useRef<{ pregunta: string; comando: string } | null>(null);
+  // Para cancelar de verdad lo que esté pensando la IA.
+  const iaAbort = useRef<AbortController | null>(null);
   const [efecto, setEfecto] = useState<{ tipo: 'scan' | 'pulse'; id: number } | null>(null);
   const [teclado, setTeclado] = useState(!vozDisponible);
   const [texto, setTexto] = useState('');
@@ -102,6 +108,8 @@ export function AsistenteScreen() {
   const [estadoSys, setEstadoSys] = useState({ hora: hora(), temp: null as number | null, bateria: null as number | null });
 
   const volumen = useSharedValue(0);
+  // La frase escuchada se procesa con la versión más nueva de procesar (se actualiza en un efecto).
+  const procesarRef = useRef<(frase: string) => Promise<void>>(async () => {});
   const escucha = useRef<Escucha | null>(null);
   const ultimo = useRef<TipoIntencion | null>(null);
   const montado = useRef(true);
@@ -149,9 +157,19 @@ export function AsistenteScreen() {
       pausarActivacion(false);
       escucha.current?.cancelar();
       callar();
+      iaAbort.current?.abort();
       liberarIA(); // libera la memoria del modelo de IA al salir
     };
   }, [db, pausarActivacion]);
+
+  // Si la app se bloquea (huella), se deja de escuchar y se corta la IA.
+  useEffect(() => {
+    if (!bloqueada) return;
+    escucha.current?.cancelar();
+    escucha.current = null;
+    iaAbort.current?.abort();
+    callar();
+  }, [bloqueada]);
 
   // ---------- Escuchar ----------
   const empezar = useCallback(async () => {
@@ -169,7 +187,6 @@ export function AsistenteScreen() {
       onFinal: (t) => {
         volumen.set(withTiming(0, { duration: 150 }));
         setParcial('');
-        // eslint-disable-next-line @typescript-eslint/no-use-before-define
         procesarRef.current(t).catch(console.warn);
       },
       onVolumen: (v) => volumen.set(withTiming(Math.max(0, Math.min(1, (v + 2) / 12)), { duration: 110 })),
@@ -198,24 +215,52 @@ export function AsistenteScreen() {
       try {
       await guardarMensaje(db, 'user', limpio);
 
-      let base = await responder(
-        db,
-        limpio,
-        { ultimo: ultimo.current, sugerencias: duda.current?.sugerencias, pendiente: duda.current?.pendiente },
-        { bateria: bateria.current },
-      );
+      // ¿Había una acción esperando tu "Sí"? (botón o voz: "sí", "dale", "no")
+      const pendienteSi = confirmacion.current;
+      confirmacion.current = null;
+      setPorConfirmar(null);
+      const corto = normalizar(limpio); // sin tildes: "sí" → "si"
+      const dijoSi = /^(si|dale|hazlo|confirmo|ya|ok|okey|de una)\b/.test(corto);
+      const dijoNo = /^(no|nop|cancela|cancelar|mejor no|olvidalo)\b/.test(corto);
+
+      let base;
+      if (pendienteSi && dijoSi) {
+        base = await responder(db, pendienteSi.comando, {}, { bateria: bateria.current, confirmado: true });
+      } else if (pendienteSi && dijoNo) {
+        base = { texto: 'Ok, no hago nada.', intencion: 'gracias' as const };
+      } else {
+        base = await responder(
+          db,
+          limpio,
+          { ultimo: ultimo.current, sugerencias: duda.current?.sugerencias, pendiente: duda.current?.pendiente },
+          { bateria: bateria.current },
+        );
+      }
       // 3ª capa: si las reglas no entendieron (o solo tienen opciones dudosas) y la IA está
       // descargada, le preguntamos a ella. Si responde, no hace falta el "¿Quisiste decir…?".
       if (base.intencion === 'desconocido' && (await iaActivada(db))) {
+        const control = new AbortController();
+        iaAbort.current = control;
         try {
           setRespuesta('Pensando…');
-          // Máximo 60 s (incluye cargar el modelo la primera vez); si no, respuesta normal.
-          base = await Promise.race([
-            preguntarIA(db, limpio, (c) => responder(db, c, {}, { bateria: bateria.current })),
-            new Promise<never>((_, rej) => setTimeout(() => rej(new Error('ia-tiempo')), 60_000)),
-          ]);
+          // Máximo 60 s (incluye cargar el modelo la primera vez). Al vencer o al tocar "Detener",
+          // la IA se detiene de verdad y no ejecuta comandos tardíos.
+          base = await preguntarIA(db, limpio, (cmd) => responder(db, cmd, {}, { bateria: bateria.current }), {
+            signal: control.signal,
+            limiteMs: 60_000,
+          });
         } catch (e) {
+          if (control.signal.aborted) {
+            // La cancelaste tú: no se dice ni se hace nada más.
+            if (montado.current) {
+              setRespuesta('Detenido.');
+              setEstado('reposo');
+            }
+            return;
+          }
           console.warn('IA no respondió', e);
+        } finally {
+          if (iaAbort.current === control) iaAbort.current = null;
         }
       }
       // Si no entendió, guardamos las opciones para la próxima frase ("la primera").
@@ -228,6 +273,10 @@ export function AsistenteScreen() {
       setRespuesta(r.texto);
       setPanel(r.panel);
       setSugerencias(r.sugerencias ?? []);
+      if (r.confirmar) {
+        confirmacion.current = r.confirmar;
+        setPorConfirmar(r.confirmar);
+      }
       setHistorial(await mensajesDeHoy(db));
 
       // Cambios de la interfaz pedidos por voz
@@ -274,7 +323,6 @@ export function AsistenteScreen() {
     },
     [db, empezar, revisar, router, setPreference],
   );
-  const procesarRef = useRef(procesar);
   useEffect(() => {
     procesarRef.current = procesar;
   }, [procesar]);
@@ -294,6 +342,8 @@ export function AsistenteScreen() {
   };
 
   const cancelar = () => {
+    iaAbort.current?.abort();
+    cancelarIA();
     escucha.current?.cancelar();
     escucha.current = null;
     callar();
@@ -314,22 +364,27 @@ export function AsistenteScreen() {
   const arrancado = useRef(false);
   useEffect(() => {
     if (boot || arrancado.current) return;
-    arrancado.current = true;
-    if (params.comando) {
-      procesar(params.comando).catch(console.warn);
-    } else if (params.auto === '1') {
-      empezar().catch(console.warn);
-    } else {
-      const t = setTimeout(() => {
-        const saludo = aplicarEstilo({ texto: '¿En qué te ayudo?', intencion: 'saludo' }, prefs.current.estilo, prefs.current.trato).texto;
-        setRespuesta(saludo);
-        if (prefs.current.voz && Platform.OS !== 'web') {
-          setEstado('hablando');
-          hablar(saludo).finally(() => montado.current && setEstado('reposo'));
+    const inmediato = !!params.comando || params.auto === '1';
+    const t = setTimeout(
+      () => {
+        if (arrancado.current) return;
+        arrancado.current = true;
+        if (params.comando) {
+          procesar(params.comando).catch(console.warn);
+        } else if (params.auto === '1') {
+          empezar().catch(console.warn);
+        } else {
+          const saludo = aplicarEstilo({ texto: '¿En qué te ayudo?', intencion: 'saludo' }, prefs.current.estilo, prefs.current.trato).texto;
+          setRespuesta(saludo);
+          if (prefs.current.voz && Platform.OS !== 'web') {
+            setEstado('hablando');
+            hablar(saludo).finally(() => montado.current && setEstado('reposo'));
+          }
         }
-      }, 250);
-      return () => clearTimeout(t);
-    }
+      },
+      inmediato ? 0 : 250,
+    );
+    return () => clearTimeout(t);
   }, [boot, params.comando, params.auto, procesar, empezar]);
 
   const enviar = () => {
@@ -387,6 +442,23 @@ export function AsistenteScreen() {
               </Animated.View>
             ) : null}
           </View>
+
+          {/* Confirmar una acción que borra datos o sale de la app */}
+          {porConfirmar && estado !== 'escuchando' ? (
+            <View style={styles.sugerencias}>
+              <Pressable
+                onPress={() => procesar('sí')}
+                style={[styles.chip, { borderColor: color, backgroundColor: `${color}22` }]}
+                accessibilityRole="button"
+                accessibilityLabel={`Sí: ${porConfirmar.pregunta}`}
+              >
+                <AppText style={styles.chipTxt}>Sí, hazlo</AppText>
+              </Pressable>
+              <Pressable onPress={() => procesar('no')} style={[styles.chip, { borderColor: `${color}55` }]} accessibilityRole="button" accessibilityLabel="No, cancelar">
+                <AppText style={styles.chipTxt}>No</AppText>
+              </Pressable>
+            </View>
+          ) : null}
 
           {/* ¿Quisiste decir…? → tocar una opción enseña a Tinzit0 */}
           {sugerencias.length && estado !== 'escuchando' ? (
@@ -447,7 +519,7 @@ export function AsistenteScreen() {
           <View style={styles.botones}>
             <BotonHud icono="list" label="Historial" onPress={() => setVerHistorial(true)} />
             <BotonHud icono={teclado ? 'mic-outline' : 'keypad-outline'} label={teclado ? 'Voz' : 'Teclado'} onPress={() => setTeclado((v) => !v)} />
-            {estado === 'escuchando' || estado === 'hablando' ? (
+            {estado === 'escuchando' || estado === 'hablando' || estado === 'pensando' ? (
               <BotonHud icono="stop" label="Detener" onPress={cancelar} activo color={color} />
             ) : (
               <BotonHud icono="mic" label="Hablar" onPress={() => empezar()} activo color={color} />

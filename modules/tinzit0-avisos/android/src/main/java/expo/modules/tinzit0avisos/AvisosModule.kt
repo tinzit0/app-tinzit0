@@ -51,6 +51,11 @@ class AvisosModule : Module() {
       AvisosService.leer(ctx)
     }
 
+    /** Quita de la cola solo los avisos ya guardados por la app (JSON con pkg, ts, title y text). */
+    Function("confirmarCola") { procesados: String ->
+      AvisosService.confirmar(ctx, procesados)
+    }
+
     Function("vaciarCola") {
       AvisosService.vaciar(ctx)
     }

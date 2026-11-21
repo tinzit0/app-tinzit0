@@ -28,6 +28,7 @@ import { compararMes } from '@/database/estadisticas';
 import { contarAvisosPendientes, obtenerProyeccion } from '@/database/finanzas';
 import { detectarRiesgo, textoAnimo } from '@/bienestar/logica';
 import { obtenerPlan, registrarAnimo } from '@/database/bienestar';
+import { necesitaConfirmacion } from '@/ia/seguridad';
 import { diaDePagoEn, listarFijos } from '@/database/fijos';
 import {
   buscarRamo,
@@ -95,10 +96,16 @@ export type Respuesta = {
   /** Opciones de "¿Quisiste decir…?" (y la frase original, para aprenderla). */
   sugerencias?: Sugerencia[];
   pendiente?: string;
+  /** Acción que necesita un "Sí" en pantalla antes de hacerse (borra datos o sale de la app). */
+  confirmar?: { pregunta: string; comando: string };
 };
 
 /** Datos del celular que el ejecutor no puede leer solo (los pasa la pantalla). */
-export type Sistema = { bateria?: number | null };
+export type Sistema = {
+  bateria?: number | null;
+  /** El usuario ya tocó "Sí": se puede hacer la acción destructiva. */
+  confirmado?: boolean;
+};
 
 const azar = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
 const mayus = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -156,6 +163,9 @@ const PANTALLAS: [RegExp, string][] = [
 export async function responder(db: SQLiteDatabase, frase: string, contexto: Contexto = {}, sistema: Sistema = {}): Promise<Respuesta> {
   const t = normalizar(sinActivacion(frase));
 
+  // 0) Si la frase habla de hacerse daño, siempre se responde con ayuda (antes que cualquier otra cosa).
+  if (detectarRiesgo(t)) return { ...(await ejecutar(db, { tipo: 'crisis' }, sistema)), intencion: 'crisis' };
+
   // 1) ¿Está respondiendo a un "¿Quisiste decir…?" ("la primera", "sí", "la segunda")?
   if (contexto.sugerencias?.length && contexto.pendiente) {
     const idx = /^(si|sip|esa|eso|la primera|primera|el primero|uno|1|correcto|exacto)$/.test(t)
@@ -176,12 +186,15 @@ export async function responder(db: SQLiteDatabase, frase: string, contexto: Con
     }
   }
 
-  // 0) Si la frase habla de hacerse daño, siempre se responde con ayuda (antes que cualquier otra cosa).
-  if (detectarRiesgo(t)) return { ...(await ejecutar(db, { tipo: 'crisis' }, sistema)), intencion: 'crisis' };
-
   // 2) ¿Ya lo aprendió antes?
   const aprendido = await buscarAprendido(db, frase);
   const i0 = interpretar(aprendido ?? frase, new Date(), contexto);
+
+  // Borrar datos (o actuar fuera de la app por algo aprendido) se confirma en pantalla.
+  const pregunta = necesitaConfirmacion(i0);
+  if (pregunta && !sistema.confirmado && (i0.tipo !== 'app_accion' || aprendido)) {
+    return { texto: pregunta, intencion: i0.tipo, confirmar: { pregunta, comando: aprendido ?? frase } };
+  }
 
   // 3) Enseñar / olvidar
   if (i0.tipo === 'ensenar') {

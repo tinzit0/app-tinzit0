@@ -133,7 +133,7 @@ export function PatronesScreen() {
             <Card style={{ gap: space.md }}>
               {calma.veces ? (
                 <AppText variant="callout">
-                  Usaste "Estoy a mil" {calma.veces} {calma.veces === 1 ? 'vez' : 'veces'}
+                  Usaste “Estoy a mil” {calma.veces} {calma.veces === 1 ? 'vez' : 'veces'}
                   {calma.bajaPromedio != null && calma.bajaPromedio > 0 ? `: en promedio la intensidad bajó ${uno(calma.bajaPromedio)} puntos.` : '.'}
                 </AppText>
               ) : null}

@@ -31,6 +31,8 @@ export function MusicaScreen() {
   const { colors } = useTheme();
   const [conectado, setConectado] = useState<boolean | null>(null);
   const [sonando, setSonando] = useState<sp.Sonando | null>(null);
+  const [leidoEn, setLeidoEn] = useState(0); // cuándo se leyó "sonando"
+  const [ahora, setAhora] = useState(0);
   const [busqueda, setBusqueda] = useState('');
   const [resultados, setResultados] = useState<sp.ResultadoBusqueda | null>(null);
   const [playlists, setPlaylists] = useState<{ id: string; uri: string; nombre: string; imagen: string | null }[]>([]);
@@ -40,7 +42,10 @@ export function MusicaScreen() {
 
   const refrescar = useCallback(async () => {
     try {
-      setSonando(await sp.queSuena());
+      const s = await sp.queSuena();
+      setSonando(s);
+      setLeidoEn(Date.now());
+      setAhora(Date.now());
     } catch (e) {
       if (e instanceof sp.ErrorSpotify && e.codigo === 'sin_cuenta') setConectado(false);
     }
@@ -67,14 +72,16 @@ export function MusicaScreen() {
   );
 
   // Barra de progreso que avanza sola entre actualizaciones
-  const [progreso, setProgreso] = useState(0);
   useEffect(() => {
-    if (!sonando) return;
-    setProgreso(sonando.progresoMs);
-    if (!sonando.reproduciendo) return;
-    const t = setInterval(() => setProgreso((p) => Math.min(p + 1000, sonando.duracionMs)), 1000);
+    if (!sonando?.reproduciendo) return;
+    const t = setInterval(() => setAhora(Date.now()), 1000);
     return () => clearInterval(t);
   }, [sonando]);
+  const progreso = !sonando
+    ? 0
+    : sonando.reproduciendo && leidoEn && ahora > leidoEn
+      ? Math.min(sonando.progresoMs + (ahora - leidoEn), sonando.duracionMs)
+      : sonando.progresoMs;
 
   const ejecutar = async (f: () => Promise<unknown>) => {
     setAviso(null);
@@ -86,15 +93,19 @@ export function MusicaScreen() {
     }
   };
 
+  const pedidoBusqueda = useRef(0);
   const buscar = async (q = busqueda) => {
     if (!q.trim()) return;
     if (!conectado) {
       await sp.reproducirBusqueda(q.trim());
       return;
     }
+    const mio = ++pedidoBusqueda.current; // solo vale la última búsqueda
     setBuscando(true);
     try {
-      setResultados(await sp.buscar(q.trim()));
+      const r = await sp.buscar(q.trim());
+      if (mio !== pedidoBusqueda.current) return;
+      setResultados(r);
     } catch (e) {
       Alert.alert('Spotify', e instanceof sp.ErrorSpotify ? e.message : 'No pude buscar ahora.');
     } finally {
@@ -172,7 +183,7 @@ export function MusicaScreen() {
           <Card style={styles.vacio}>
             <Ionicons name="musical-notes-outline" size={28} color={colors.textTertiary} />
             <AppText variant="callout" tone="secondary" style={{ textAlign: 'center' }}>
-              No está sonando nada. Busca algo abajo o dime "pon música para entrenar".
+              No está sonando nada. Busca algo abajo o dime “pon música para entrenar”.
             </AppText>
           </Card>
         ) : null}

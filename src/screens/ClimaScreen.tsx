@@ -33,8 +33,18 @@ export function ClimaScreen() {
   );
 
   useEffect(() => {
-    cargar().catch(console.warn);
-  }, [cargar]);
+    let vivo = true;
+    obtenerClima(db)
+      .then((x) => {
+        if (!vivo) return;
+        setP(x);
+        setCargando(false);
+      })
+      .catch(() => vivo && setCargando(false));
+    return () => {
+      vivo = false;
+    };
+  }, [db]);
 
   if (!p) {
     return (

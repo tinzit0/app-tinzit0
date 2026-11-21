@@ -18,6 +18,7 @@ import {
   type TarjetaNueva,
 } from '@/estudio/logica';
 import { toISODate } from '@/utils/fechas';
+import { transaccion } from './tx';
 
 export const COLORES_RAMO = ['#CFF56B', '#38BDF8', '#F59E0B', '#A78BFA', '#34D399', '#F472B6', '#FB923C', '#EF4444', '#2DD4BF', '#94A3B8'];
 
@@ -60,19 +61,20 @@ export async function listarRamosSimple(db: SQLiteDatabase): Promise<Ramo[]> {
   return db.getAllAsync<Ramo>('SELECT * FROM courses WHERE archived = 0 ORDER BY name COLLATE NOCASE');
 }
 
+/** Todos los ramos con su resumen, con 3 consultas en total (no 2 por ramo). */
 export async function listarRamos(db: SQLiteDatabase): Promise<RamoResumen[]> {
-  const ramos = await listarRamosSimple(db);
-  const out: RamoResumen[] = [];
-  for (const r of ramos) out.push(await resumenRamo(db, r));
-  return out;
+  const [ramos, evals, asis] = await Promise.all([
+    listarRamosSimple(db),
+    db.getAllAsync<Evaluacion>('SELECT * FROM evaluations ORDER BY (date IS NULL), date, id'),
+    db.getAllAsync<{ course_id: number; total: number; presentes: number }>(
+      'SELECT course_id, COUNT(*) AS total, COALESCE(SUM(present), 0) AS presentes FROM attendance GROUP BY course_id',
+    ),
+  ]);
+  const asisPor = new Map(asis.map((a) => [a.course_id, a]));
+  return ramos.map((r) => armarResumen(r, evals.filter((e) => e.course_id === r.id), asisPor.get(r.id)));
 }
 
-export async function resumenRamo(db: SQLiteDatabase, r: Ramo): Promise<RamoResumen> {
-  const evals = await evaluacionesDeRamo(db, r.id);
-  const asis = await db.getFirstAsync<{ total: number; presentes: number }>(
-    'SELECT COUNT(*) AS total, COALESCE(SUM(present), 0) AS presentes FROM attendance WHERE course_id = ?',
-    r.id,
-  );
+function armarResumen(r: Ramo, evals: Evaluacion[], asis: { total: number; presentes: number } | undefined): RamoResumen {
   const total = asis?.total ?? 0;
   const presentes = asis?.presentes ?? 0;
   return {
@@ -84,6 +86,15 @@ export async function resumenRamo(db: SQLiteDatabase, r: Ramo): Promise<RamoResu
     faltas: total - presentes,
     evaluaciones: evals.length,
   };
+}
+
+export async function resumenRamo(db: SQLiteDatabase, r: Ramo): Promise<RamoResumen> {
+  const evals = await evaluacionesDeRamo(db, r.id);
+  const asis = await db.getFirstAsync<{ total: number; presentes: number }>(
+    'SELECT COUNT(*) AS total, COALESCE(SUM(present), 0) AS presentes FROM attendance WHERE course_id = ?',
+    r.id,
+  );
+  return armarResumen(r, evals, asis ?? undefined);
 }
 
 export async function obtenerRamo(db: SQLiteDatabase, id: number): Promise<Ramo | null> {
@@ -119,9 +130,11 @@ export async function actualizarRamo(db: SQLiteDatabase, id: number, r: NuevoRam
 }
 
 export async function eliminarRamo(db: SQLiteDatabase, id: number) {
-  const evals = await evaluacionesDeRamo(db, id);
-  for (const e of evals) await borrarPlan(db, e.id);
-  await db.runAsync('DELETE FROM courses WHERE id = ?', id);
+  await transaccion(db, async (tx) => {
+    const evals = await evaluacionesDeRamo(tx, id);
+    for (const e of evals) await borrarPlan(tx, e.id);
+    await tx.runAsync('DELETE FROM courses WHERE id = ?', id);
+  });
 }
 
 /** Busca un ramo por cómo lo nombraste ("cálculo" → "Cálculo I"). */
@@ -146,8 +159,12 @@ export async function todosLosBloques(db: SQLiteDatabase): Promise<BloqueConRamo
 
 export type NuevoBloque = { weekday: number; start_time: string; end_time: string; room?: string | null };
 
-/** Reemplaza todos los bloques de un ramo. */
+/** Reemplaza todos los bloques de un ramo (todo o nada: si falla, queda el horario anterior). */
 export async function guardarBloques(db: SQLiteDatabase, courseId: number, bloques: NuevoBloque[]) {
+  await transaccion(db, (tx) => guardarBloquesEn(tx, courseId, bloques));
+}
+
+async function guardarBloquesEn(db: SQLiteDatabase, courseId: number, bloques: NuevoBloque[]) {
   await db.runAsync('DELETE FROM class_blocks WHERE course_id = ?', courseId);
   for (const b of bloques) {
     await db.runAsync(
@@ -188,44 +205,53 @@ export async function proximasEvaluaciones(db: SQLiteDatabase, dias = 30, desde 
 
 export type NuevaEvaluacion = Omit<Evaluacion, 'id'>;
 
+/** Crea la evaluación y su plan de estudio juntos (si algo falla, no queda nada a medias). */
 export async function crearEvaluacion(db: SQLiteDatabase, e: NuevaEvaluacion, hoy = new Date()): Promise<number> {
-  const x = await db.runAsync(
-    'INSERT INTO evaluations (course_id, name, weight, grade, date, study_hours) VALUES (?, ?, ?, ?, ?, ?)',
-    e.course_id,
-    e.name.trim(),
-    e.weight,
-    e.grade,
-    e.date,
-    e.study_hours,
-  );
-  await rehacerPlan(db, x.lastInsertRowId, hoy);
-  return x.lastInsertRowId;
+  return transaccion(db, async (tx) => {
+    const x = await tx.runAsync(
+      'INSERT INTO evaluations (course_id, name, weight, grade, date, study_hours) VALUES (?, ?, ?, ?, ?, ?)',
+      e.course_id,
+      e.name.trim(),
+      e.weight,
+      e.grade,
+      e.date,
+      e.study_hours,
+    );
+    await rehacerPlanEn(tx, x.lastInsertRowId, hoy);
+    return x.lastInsertRowId;
+  });
 }
 
 export async function actualizarEvaluacion(db: SQLiteDatabase, id: number, e: NuevaEvaluacion, hoy = new Date()) {
-  await db.runAsync(
-    'UPDATE evaluations SET course_id = ?, name = ?, weight = ?, grade = ?, date = ?, study_hours = ? WHERE id = ?',
-    e.course_id,
-    e.name.trim(),
-    e.weight,
-    e.grade,
-    e.date,
-    e.study_hours,
-    id,
-  );
-  await rehacerPlan(db, id, hoy);
+  await transaccion(db, async (tx) => {
+    await tx.runAsync(
+      'UPDATE evaluations SET course_id = ?, name = ?, weight = ?, grade = ?, date = ?, study_hours = ? WHERE id = ?',
+      e.course_id,
+      e.name.trim(),
+      e.weight,
+      e.grade,
+      e.date,
+      e.study_hours,
+      id,
+    );
+    await rehacerPlanEn(tx, id, hoy);
+  });
 }
 
 /** Pone (o cambia) solo la nota. */
 export async function ponerNota(db: SQLiteDatabase, id: number, nota: number | null) {
-  await db.runAsync('UPDATE evaluations SET grade = ? WHERE id = ?', nota, id);
-  // Con nota puesta, ya no tiene sentido seguir estudiando para esa prueba.
-  if (nota != null) await borrarPlan(db, id);
+  await transaccion(db, async (tx) => {
+    await tx.runAsync('UPDATE evaluations SET grade = ? WHERE id = ?', nota, id);
+    // Con nota puesta, ya no tiene sentido seguir estudiando para esa prueba.
+    if (nota != null) await borrarPlan(tx, id);
+  });
 }
 
 export async function eliminarEvaluacion(db: SQLiteDatabase, id: number) {
-  await borrarPlan(db, id);
-  await db.runAsync('DELETE FROM evaluations WHERE id = ?', id);
+  await transaccion(db, async (tx) => {
+    await borrarPlan(tx, id);
+    await tx.runAsync('DELETE FROM evaluations WHERE id = ?', id);
+  });
 }
 
 async function borrarPlan(db: SQLiteDatabase, evaluationId: number) {
@@ -237,6 +263,10 @@ async function borrarPlan(db: SQLiteDatabase, evaluationId: number) {
  * Se rehace cada vez que cambias la fecha o las horas (las tareas ya hechas se respetan).
  */
 export async function rehacerPlan(db: SQLiteDatabase, evaluationId: number, hoy = new Date()): Promise<number> {
+  return transaccion(db, (tx) => rehacerPlanEn(tx, evaluationId, hoy));
+}
+
+async function rehacerPlanEn(db: SQLiteDatabase, evaluationId: number, hoy = new Date()): Promise<number> {
   await borrarPlan(db, evaluationId);
   const e = await obtenerEvaluacion(db, evaluationId);
   if (!e || !e.date || !(e.study_hours > 0) || e.grade != null) return 0;
@@ -288,6 +318,25 @@ export async function asistenciaDeRamo(db: SQLiteDatabase, courseId: number): Pr
 export async function registrarEstudio(db: SQLiteDatabase, courseId: number | null, minutos: number, fecha = toISODate()) {
   if (minutos < 1) return;
   await db.runAsync('INSERT INTO study_sessions (course_id, date, minutes) VALUES (?, ?, ?)', courseId, fecha, Math.round(minutos));
+}
+
+/**
+ * Registra un bloque de Pomodoro UNA sola vez (aunque se llame dos veces: al volver a la app,
+ * desde dos pantallas, etc.). El id del último bloque registrado se guarda en la misma transacción.
+ */
+export async function registrarBloque(db: SQLiteDatabase, bloqueId: string, courseId: number | null, minutos: number): Promise<boolean> {
+  if (minutos < 1) return false;
+  return transaccion(db, async (tx) => {
+    const previo = await tx.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'pomodoro_registrados'");
+    const ids = (previo?.value ?? '').split(',').filter(Boolean);
+    if (ids.includes(bloqueId)) return false;
+    await tx.runAsync('INSERT INTO study_sessions (course_id, date, minutes) VALUES (?, ?, ?)', courseId, toISODate(), Math.round(minutos));
+    await tx.runAsync(
+      "INSERT INTO settings (key, value) VALUES ('pomodoro_registrados', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+      [...ids, bloqueId].slice(-20).join(','),
+    );
+    return true;
+  });
 }
 
 export async function minutosEstudio(db: SQLiteDatabase, desde: string, hasta: string): Promise<{ total: number; porRamo: { name: string; color: string; minutos: number }[] }> {

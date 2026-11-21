@@ -6,6 +6,8 @@
  */
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import { enExclusiva, transaccion } from './tx';
+
 import { toISODate } from '@/utils/fechas';
 
 export type GastoFijo = {
@@ -86,8 +88,16 @@ export async function pagadoEsteMes(db: SQLiteDatabase, id: number, hoy = new Da
 /**
  * Agrega como gasto los fijos cuyo día de pago ya llegó este mes y que aún
  * no se han sumado. Se llama al abrir la app. Devuelve cuántos agregó.
+ *
+ * Seguro ante ejecuciones simultáneas: cada fijo se "reclama" primero en fixed_payments
+ * (clave única fijo+mes) y el gasto se crea en la MISMA transacción. Si otra ejecución ya lo
+ * reclamó, esta no hace nada. Además corre en fila con las otras tareas de fondo.
  */
-export async function aplicarFijosDelMes(db: SQLiteDatabase, hoy = new Date()): Promise<number> {
+export function aplicarFijosDelMes(db: SQLiteDatabase, hoy = new Date()): Promise<number> {
+  return enExclusiva(() => aplicarFijosSinFila(db, hoy));
+}
+
+export async function aplicarFijosSinFila(db: SQLiteDatabase, hoy = new Date()): Promise<number> {
   const mes = toISODate(hoy).slice(0, 7);
   const pendientes = await db.getAllAsync<GastoFijo>(
     `SELECT f.* FROM fixed_expenses f
@@ -99,29 +109,26 @@ export async function aplicarFijosDelMes(db: SQLiteDatabase, hoy = new Date()): 
   for (const f of pendientes) {
     const dia = diaDePagoEn(f, hoy.getFullYear(), hoy.getMonth());
     if (dia > hoy.getDate()) continue; // todavía no toca
-    // Si el fijo se creó después de su día de pago de este mes, no lo cobramos retroactivo.
-    const creado = await db.getFirstAsync<{ c: string }>('SELECT created_at AS c FROM fixed_expenses WHERE id = ?', f.id);
     const fechaPago = toISODate(new Date(hoy.getFullYear(), hoy.getMonth(), dia));
-    if (creado && creado.c.slice(0, 10) > fechaPago) {
-      await db.runAsync('INSERT OR IGNORE INTO fixed_payments (fixed_id, month, expense_id) VALUES (?, ?, NULL)', f.id, mes);
-      continue;
-    }
-    await db.withTransactionAsync(async () => {
-      const r = await db.runAsync(
+    const agregado = await transaccion(db, async (tx) => {
+      // 1) Reclamar el mes para este fijo. Si ya estaba (otra ejecución), no se hace nada.
+      const reclamo = await tx.runAsync('INSERT OR IGNORE INTO fixed_payments (fixed_id, month, expense_id) VALUES (?, ?, NULL)', f.id, mes);
+      if (!reclamo.changes) return false;
+      // 2) Si el fijo se creó después de su día de pago de este mes, no se cobra retroactivo.
+      const creado = await tx.getFirstAsync<{ c: string }>('SELECT created_at AS c FROM fixed_expenses WHERE id = ?', f.id);
+      if (creado && creado.c.slice(0, 10) > fechaPago) return false;
+      // 3) Crear el gasto y ligarlo.
+      const r = await tx.runAsync(
         'INSERT INTO expenses (amount, category, note, date) VALUES (?, ?, ?, ?)',
         f.amount,
         f.category,
         `${f.name} (fijo)`,
         fechaPago,
       );
-      await db.runAsync(
-        'INSERT OR IGNORE INTO fixed_payments (fixed_id, month, expense_id) VALUES (?, ?, ?)',
-        f.id,
-        mes,
-        r.lastInsertRowId,
-      );
+      await tx.runAsync('UPDATE fixed_payments SET expense_id = ? WHERE fixed_id = ? AND month = ?', r.lastInsertRowId, f.id, mes);
+      return true;
     });
-    n++;
+    if (agregado) n++;
   }
   return n;
 }

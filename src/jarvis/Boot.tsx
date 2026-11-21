@@ -33,7 +33,9 @@ export function Boot({ color, onFin }: { color: string; onFin: () => void }) {
 
   // Guardamos onFin en una ref: así la secuencia corre UNA sola vez aunque la pantalla se actualice.
   const finRef = useRef(onFin);
-  finRef.current = onFin;
+  useEffect(() => {
+    finRef.current = onFin;
+  }, [onFin]);
 
   useEffect(() => {
     yaArranco = true;

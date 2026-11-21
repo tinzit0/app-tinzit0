@@ -36,7 +36,7 @@ const MIENTRAS = [
 function Temporizador({ total, onFin }: { total: number; onFin: () => void }) {
   const { colors } = useTheme();
   const [inicio] = useState(Date.now);
-  const [ahora, setAhora] = useState(Date.now());
+  const [ahora, setAhora] = useState(Date.now);
   useKeepAwake();
 
   useEffect(() => {

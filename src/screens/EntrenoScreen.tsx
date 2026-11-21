@@ -63,19 +63,18 @@ export function EntrenoScreen() {
   }, [db, fecha]);
 
   useEffect(() => {
-    recargar().catch(console.warn);
-  }, [recargar]);
-
-  // Si ya entrenaste hoy, dejamos elegido el último ejercicio que registraste.
-  useEffect(() => {
-    seriesDeFecha(db, fecha)
-      .then((s) => {
-        const ultimo = s[s.length - 1];
-        if (ultimo) elegir(ultimo.exercise_id);
+    let vivo = true;
+    Promise.all([listarEjercicios(db), seriesDeFecha(db, fecha)])
+      .then(([e, s]) => {
+        if (!vivo) return;
+        setEjercicios(e);
+        setSeries(s);
       })
       .catch(console.warn);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => {
+      vivo = false;
+    };
+  }, [db, fecha]);
 
   // Al elegir un ejercicio, precargamos lo que hiciste la última vez.
   const elegir = async (id: number) => {
@@ -87,6 +86,17 @@ export function EntrenoScreen() {
       setPeso(u.weight);
     }
   };
+
+  // Si ya entrenaste hoy, dejamos elegido el último ejercicio que registraste.
+  useEffect(() => {
+    seriesDeFecha(db, fecha)
+      .then((s) => {
+        const ultimo = s[s.length - 1];
+        if (ultimo) elegir(ultimo.exercise_id);
+      })
+      .catch(console.warn);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const puedeAgregar = seleccion !== null || nuevoNombre.trim().length > 1;
 

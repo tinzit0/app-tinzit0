@@ -16,6 +16,7 @@ import type { Estilo } from '@/jarvis/persona';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, space, type } from '@/theme/tokens';
 import { configurarVoz, hablar, vocesEspanol, type VozEs } from '@/voice/hablar';
+import { revisarCapacidadesVoz, textoPrivacidadVoz } from '@/voice/reconocedor';
 import { useVoz } from '@/voice/VozProvider';
 import { AppText } from './AppText';
 import { SegmentedControl } from './SegmentedControl';
@@ -30,6 +31,7 @@ export function AsistenteSettings() {
   const [voces, setVoces] = useState<VozEs[]>([]);
   const [vozId, setVozId] = useState<string | null>(null);
   const [verVoces, setVerVoces] = useState(false);
+  const [privacidadVoz, setPrivacidadVoz] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -38,6 +40,8 @@ export function AsistenteSettings() {
       setTrato((await getSetting(db, 'asistente_trato')) ?? '');
       setVozId(await getSetting(db, 'voz_id'));
       if (Platform.OS !== 'web') setVoces(await vocesEspanol());
+      // Se revisa de verdad si el español está descargado para reconocer sin internet.
+      setPrivacidadVoz(textoPrivacidadVoz(await revisarCapacidadesVoz(true)));
     })().catch(console.warn);
   }, [db]);
 
@@ -69,6 +73,11 @@ export function AsistenteSettings() {
 
   return (
     <View>
+      {privacidadVoz ? (
+        <AppText variant="caption" tone="tertiary" style={{ marginBottom: space.lg }}>
+          {privacidadVoz}
+        </AppText>
+      ) : null}
       <AppText variant="callout" tone="secondary" style={{ marginBottom: space.sm }}>Personalidad</AppText>
       <SegmentedControl<Estilo>
         value={estilo}

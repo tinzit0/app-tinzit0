@@ -45,7 +45,8 @@ export function MedicionScreen() {
       fecha,
       Object.fromEntries(MEDIDAS.map((m) => [m.key, num(valores[m.key])])) as Record<Medida, number | null>,
     );
-    router.canGoBack() ? router.back() : router.replace('/cuerpo');
+    if (router.canGoBack()) router.back();
+    else router.replace('/cuerpo');
   };
 
   return (

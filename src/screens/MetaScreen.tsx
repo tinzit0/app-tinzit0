@@ -44,8 +44,18 @@ export function MetaScreen() {
   }, [db, id]);
 
   useEffect(() => {
-    cargar().catch(console.warn);
-  }, [cargar]);
+    let vivo = true;
+    Promise.all([obtenerMeta(db, Number(id)), abonosDeMeta(db, Number(id))])
+      .then(([m, a]) => {
+        if (!vivo) return;
+        setMeta(m);
+        setAbonos(a);
+      })
+      .catch(console.warn);
+    return () => {
+      vivo = false;
+    };
+  }, [db, id]);
 
   const agregar = async (monto: number) => {
     if (!meta || monto === 0) return;

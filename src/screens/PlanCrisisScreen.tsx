@@ -14,6 +14,7 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Field } from '@/components/Field';
 import { IconButton } from '@/components/IconButton';
+import { useLock } from '@/components/LockGate';
 import { PressableScale } from '@/components/PressableScale';
 import { guardarPlan, LINEAS_AYUDA, obtenerPlan, PLAN_VACIO, type Contacto, type PlanCrisis } from '@/database/bienestar';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -30,6 +31,7 @@ const llamar = (tel: string) => Linking.openURL(`tel:${tel}`).catch(() => {});
 export function PlanCrisisScreen() {
   const db = useSQLiteContext();
   const { colors } = useTheme();
+  const { bloqueada } = useLock();
   const [plan, setPlan] = useState<PlanCrisis>(PLAN_VACIO);
   const [editando, setEditando] = useState(false);
   const [borrador, setBorrador] = useState<{ senales: string; calma: string; razones: string; contactos: Contacto[] }>({ senales: '', calma: '', razones: '', contactos: [] });
@@ -91,7 +93,11 @@ export function PlanCrisisScreen() {
           ))}
         </View>
 
-        {editando ? (
+        {bloqueada ? (
+          <AppText variant="callout" tone="secondary" style={{ marginTop: space.xxl }}>
+            Tu plan personal (contactos y razones) se ve al desbloquear Tinzit0.
+          </AppText>
+        ) : editando ? (
           <>
             {SECCIONES.map((s) => (
               <View key={s.clave} style={styles.seccion}>

@@ -16,9 +16,10 @@ import { Platform } from 'react-native';
 
 import { getSetting, setSetting } from '@/database/queries';
 import type { Accion, Respuesta } from '@/voice/ejecutar';
-import { EJEMPLOS } from '@/voice/interpretar';
+import { EJEMPLOS, interpretar } from '@/voice/interpretar';
 import { construirResumen } from '@/voice/resumen';
 import { leerLlamadas, sinPensamiento } from './parser';
+import { revisarComandoIA } from './seguridad';
 
 type RNE = typeof import('react-native-executorch');
 type Sesion = Awaited<ReturnType<RNE['createLLMChatSession']>>;
@@ -122,6 +123,36 @@ export async function eliminarIA(db: SQLiteDatabase) {
   await setSetting(db, 'ia_modelo', '');
 }
 
+// ---------- Una cosa a la vez ----------
+
+let filaIA: Promise<unknown> = Promise.resolve();
+/** Las operaciones de IA comparten el modelo en memoria: se ejecutan una detrás de otra. */
+function enFilaIA<T>(fn: () => Promise<T>): Promise<T> {
+  const r = filaIA.then(fn, fn);
+  filaIA = r.catch(() => undefined);
+  return r;
+}
+
+/** Pedido en curso: si se cancela o vence, sus comandos tardíos se ignoran. */
+type Pedido = { vigente: boolean; ultima: Respuesta | null; acciones: Accion[]; ejecutar: (c: string) => Promise<Respuesta> };
+let pedidoActual: Pedido | null = null;
+
+/** Detiene lo que esté generando la IA ahora (botón "Detener" o salir del asistente). */
+export function cancelarIA() {
+  if (pedidoActual) pedidoActual.vigente = false;
+  try {
+    sesion?.stop();
+  } catch {
+    // no había nada generando
+  }
+}
+
+export class IACancelada extends Error {
+  constructor(motivo: 'cancelada' | 'tiempo') {
+    super(motivo === 'tiempo' ? 'ia-tiempo' : 'ia-cancelada');
+  }
+}
+
 // ---------- Conversar ----------
 
 let sesion: Sesion | null = null;
@@ -134,6 +165,7 @@ let datosCambiaron = false;
 
 /** Libera la memoria del modelo (se llama al salir del asistente). */
 export function liberarIA() {
+  cancelarIA();
   try {
     sesion?.stop();
     sesion?.dispose();
@@ -161,8 +193,6 @@ Reglas:
 DATOS DEL USUARIO:
 ${resumen}`;
 
-// La herramienta escribe en el objeto de la pregunta ACTUAL (la sesión se reutiliza entre preguntas).
-let actual: { ultima: Respuesta | null; acciones: Accion[]; ejecutar: (c: string) => Promise<Respuesta> } | null = null;
 
 async function obtenerSesion(db: SQLiteDatabase): Promise<Sesion> {
   if (sesion) return sesion;
@@ -189,13 +219,21 @@ async function obtenerSesion(db: SQLiteDatabase): Promise<Sesion> {
               },
             },
             execute: async (args: Record<string, unknown>) => {
-              const comando = typeof args.comando === 'string' ? args.comando : '';
-              if (!comando.trim()) return 'Error: falta el comando.';
-              if (!actual) return 'Error: sin contexto.';
-              const r = await actual.ejecutar(comando);
-              actual.ultima = r;
+              // El pedido que originó esta llamada: si se canceló o venció, NO se ejecuta nada.
+              const pedido = pedidoActual;
+              if (!pedido || !pedido.vigente) return 'Cancelado: no hagas nada más.';
+              const revision = revisarComandoIA(args, interpretar);
+              if (revision.tipo === 'invalido') return `Error: ${revision.motivo}`;
+              if (revision.tipo === 'confirmar') {
+                // Acción destructiva o que sale de la app: la decide el usuario en pantalla.
+                pedido.ultima = { texto: revision.pregunta, confirmar: { comando: revision.comando, pregunta: revision.pregunta } };
+                return 'Esta acción necesita que el usuario la confirme en la pantalla. Dile que toque "Sí" para hacerla.';
+              }
+              const r = await pedido.ejecutar(revision.comando);
+              if (!pedido.vigente) return 'Cancelado.';
+              pedido.ultima = r;
               datosCambiaron = true;
-              if (r.accion) actual.acciones.push(r.accion);
+              if (r.accion) pedido.acciones.push(r.accion);
               return r.intencion === 'desconocido' ? 'La app no reconoce ese comando. Responde al usuario con lo que sepas o pídele que lo diga de otra forma.' : r.texto;
             },
           },
@@ -219,7 +257,11 @@ async function obtenerSesion(db: SQLiteDatabase): Promise<Sesion> {
  * Abre una sesión aparte, sin herramientas, y la cierra al terminar para liberar memoria.
  * Lanza error si la IA no está descargada: quien llama usa el método sin IA.
  */
-export async function generarTexto(db: SQLiteDatabase, instruccion: string, texto: string, onToken?: (t: string) => void): Promise<string> {
+export function generarTexto(db: SQLiteDatabase, instruccion: string, texto: string, onToken?: (t: string) => void): Promise<string> {
+  return enFilaIA(() => generarTextoSinFila(db, instruccion, texto, onToken));
+}
+
+async function generarTextoSinFila(db: SQLiteDatabase, instruccion: string, texto: string, onToken?: (t: string) => void): Promise<string> {
   const l = cargarLib();
   const m = await modeloLocal(db);
   if (!l || !m || (await getSetting(db, 'ia_activa')) === '0') throw new Error('ia-no-lista');
@@ -248,39 +290,71 @@ export async function generarTexto(db: SQLiteDatabase, instruccion: string, text
 
 /**
  * Pregunta a la IA. Devuelve una Respuesta como las del intérprete.
- * Lanza error si la IA no está lista: quien llama usa la respuesta normal.
+ * - Lanza error si la IA no está lista: quien llama usa la respuesta normal.
+ * - `signal`: al abortar, se detiene la generación y no se ejecuta ningún comando tardío.
+ * - `limiteMs`: tiempo máximo (incluye cargar el modelo). Al vencer, igual que cancelar.
+ * - Las acciones destructivas o que salen de la app vuelven como `confirmar` (no se ejecutan).
  */
-export async function preguntarIA(
+export function preguntarIA(
   db: SQLiteDatabase,
   frase: string,
   ejecutarComando: (c: string) => Promise<Respuesta>,
-  onToken?: (t: string) => void,
+  opciones: { signal?: AbortSignal; limiteMs?: number; onToken?: (t: string) => void } = {},
 ): Promise<Respuesta> {
-  const herramienta = { ultima: null as Respuesta | null, acciones: [] as Accion[], ejecutar: ejecutarComando };
-  actual = herramienta;
-  if (sesion && (turnos >= 3 || datosCambiaron)) liberarIA();
-  const s = await obtenerSesion(db);
+  const pedido: Pedido = { vigente: true, ultima: null, acciones: [], ejecutar: ejecutarComando };
+  let motivo: 'cancelada' | 'tiempo' | null = null;
+  const parar = (m: 'cancelada' | 'tiempo') => {
+    if (motivo) return;
+    motivo = m;
+    pedido.vigente = false;
+    try {
+      if (pedidoActual === pedido) sesion?.stop();
+    } catch {
+      // nada que detener
+    }
+  };
+  if (opciones.signal?.aborted) return Promise.reject(new IACancelada('cancelada'));
+  const alAbortar = () => parar('cancelada');
+  opciones.signal?.addEventListener('abort', alAbortar);
+  const corte = setTimeout(() => parar('tiempo'), opciones.limiteMs ?? 60_000);
 
-  // Límite de tiempo: si tarda más de 40 s, cortamos.
-  const corte = setTimeout(() => s.stop(), 40_000);
-  try {
-    const turno = await s.sendMessage(frase, onToken);
-    turnos++;
-    const ultimo = [...turno.messages].reverse().find((m) => m.role === 'assistant');
-    const contenido = typeof ultimo?.content === 'string' ? ultimo.content : '';
-    let texto = sinPensamiento(contenido).replace(/<tool_call>[\s\S]*?(<\/tool_call>|$)/g, '').trim();
-    if (!texto && herramienta.ultima) texto = herramienta.ultima.texto;
-    if (!texto) throw new Error('ia-sin-respuesta');
-    return {
-      texto,
-      intencion: herramienta.ultima?.intencion ?? 'ia',
-      panel: herramienta.ultima?.panel,
-      ruta: herramienta.ultima?.ruta,
-      accion: herramienta.acciones[0],
-      hud: herramienta.ultima?.hud,
-    } as Respuesta;
-  } finally {
-    clearTimeout(corte);
-    actual = null;
-  }
+  return enFilaIA(async () => {
+    try {
+      if (motivo) throw new IACancelada(motivo);
+      if (sesion && (turnos >= 3 || datosCambiaron)) liberarIA();
+      const s = await obtenerSesion(db);
+      if (motivo) throw new IACancelada(motivo);
+      pedidoActual = pedido;
+      const turno = await s.sendMessage(frase, opciones.onToken);
+      turnos++;
+      if (motivo) throw new IACancelada(motivo);
+      const ultimo = [...turno.messages].reverse().find((m) => m.role === 'assistant');
+      const contenido = typeof ultimo?.content === 'string' ? ultimo.content : '';
+      let texto = sinPensamiento(contenido).replace(/<tool_call>[\s\S]*?(<\/tool_call>|$)/g, '').trim();
+      if (pedido.ultima?.confirmar) texto = pedido.ultima.texto; // la pregunta de confirmación manda
+      if (!texto && pedido.ultima) texto = pedido.ultima.texto;
+      if (!texto) throw new Error('ia-sin-respuesta');
+      return {
+        texto,
+        intencion: pedido.ultima?.intencion ?? 'ia',
+        panel: pedido.ultima?.panel,
+        ruta: pedido.ultima?.ruta,
+        accion: pedido.acciones[0],
+        hud: pedido.ultima?.hud,
+        confirmar: pedido.ultima?.confirmar,
+      } as Respuesta;
+    } catch (e) {
+      // Tras cancelar o vencer, la sesión puede quedar a medias: se libera para empezar limpio.
+      if (motivo) {
+        liberarIA();
+        throw new IACancelada(motivo);
+      }
+      throw e;
+    } finally {
+      pedido.vigente = false;
+      if (pedidoActual === pedido) pedidoActual = null;
+      clearTimeout(corte);
+      opciones.signal?.removeEventListener('abort', alAbortar);
+    }
+  });
 }

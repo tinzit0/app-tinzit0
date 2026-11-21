@@ -13,14 +13,15 @@ import {
   Inter_700Bold,
   useFonts,
 } from '@expo-google-fonts/inter';
-import { Stack } from 'expo-router';
+import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AppLifecycle } from '@/components/AppLifecycle';
+import { ErrorInicio } from '@/components/ErrorInicio';
 import { LockGate } from '@/components/LockGate';
 import { LogrosProvider, useLogros } from '@/components/LogrosProvider';
 import { migrateDb } from '@/database/schema';
@@ -32,20 +33,31 @@ import { fonts } from '@/theme/tokens';
 SplashScreen.preventAutoHideAsync().catch(() => {});
 SplashScreen.setOptions({ duration: 250, fade: true });
 
+/** Si una pantalla se cae, Expo Router muestra esto (con Reintentar) en vez de cerrar la app. */
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  return <ErrorInicio error={error} reintentar={retry} />;
+}
+
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold });
+  const [errorBase, setErrorBase] = useState<Error | null>(null);
+  const [fuentes, errorFuentes] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold });
+
+  // Si la tipografía no carga, se sigue con la del sistema (no se queda en la pantalla de carga).
+  const listo = fuentes || !!errorFuentes;
 
   useEffect(() => {
-    if (fontsLoaded) SplashScreen.hideAsync().catch(() => {});
-  }, [fontsLoaded]);
+    if (listo) SplashScreen.hideAsync().catch(() => {});
+  }, [listo]);
 
   // Mientras carga la fuente se mantiene la pantalla de carga (splash).
-  if (!fontsLoaded) return null;
+  if (!listo) return null;
+  // La base no abrió (o una migración falló): pantalla de rescate, sin borrar nada.
+  if (errorBase) return <ErrorInicio error={errorBase} />;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider>
-        <SQLiteProvider databaseName="tinzit0.db" onInit={migrateDb}>
+        <SQLiteProvider databaseName="tinzit0.db" onInit={migrateDb} onError={setErrorBase}>
           <LockGate>
             <LogrosProvider>
               <VozProvider>
@@ -121,6 +133,11 @@ function RootStack() {
         <Stack.Screen name="patrones" options={{ title: 'Tus patrones' }} />
         <Stack.Screen name="plan-crisis" options={{ title: 'Plan de crisis' }} />
         <Stack.Screen name="habilidades" options={{ title: 'Habilidades' }} />
+        <Stack.Screen name="buscar" options={{ title: 'Buscar' }} />
+        <Stack.Screen name="inicio-config" options={{ title: 'Ordenar Inicio' }} />
+        <Stack.Screen name="presupuestos" options={{ title: 'Presupuestos' }} />
+        <Stack.Screen name="duplicados" options={{ title: 'Gastos repetidos' }} />
+        <Stack.Screen name="bienvenida" options={{ title: 'Bienvenida', headerShown: false }} />
       </Stack>
     </>
   );

@@ -20,6 +20,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
+import { useLock } from '@/components/LockGate';
 import { getSetting, setSetting } from '@/database/queries';
 import { escuchar, pedirPermisoMicrofono, vozDisponible, type Escucha } from './reconocedor';
 import { detectarActivacion } from './texto';
@@ -27,6 +28,8 @@ import { detectarActivacion } from './texto';
 type Ctx = {
   vozDisponible: boolean;
   escuchaActiva: boolean;
+  /** La app está bloqueada con huella: nada debe escuchar. */
+  bloqueada: boolean;
   cambiarEscuchaActiva: (v: boolean) => Promise<void>;
   /** El asistente la pausa mientras está abierto (para no competir por el micrófono). */
   pausarActivacion: (pausar: boolean) => void;
@@ -35,6 +38,7 @@ type Ctx = {
 const VozContext = createContext<Ctx>({
   vozDisponible: false,
   escuchaActiva: false,
+  bloqueada: false,
   cambiarEscuchaActiva: async () => {},
   pausarActivacion: () => {},
 });
@@ -44,6 +48,7 @@ export const useVoz = () => useContext(VozContext);
 export function VozProvider({ children }: { children: ReactNode }) {
   const db = useSQLiteContext();
   const router = useRouter();
+  const { bloqueada } = useLock();
   const [escuchaActiva, setEscuchaActiva] = useState(false);
   const [pausado, setPausado] = useState(false);
   const [activa, setActiva] = useState(AppState.currentState === 'active');
@@ -59,7 +64,8 @@ export function VozProvider({ children }: { children: ReactNode }) {
     return () => s.remove();
   }, []);
 
-  const debeEscuchar = escuchaActiva && !pausado && activa && vozDisponible;
+  // Con la app bloqueada (huella) NO se escucha: nadie debería poder darle órdenes sin desbloquear.
+  const debeEscuchar = escuchaActiva && !pausado && activa && vozDisponible && !bloqueada;
 
   const iniciar = useCallback(() => {
     if (escucha.current) return;
@@ -124,7 +130,7 @@ export function VozProvider({ children }: { children: ReactNode }) {
   const pausarActivacion = useCallback((p: boolean) => setPausado(p), []);
 
   return (
-    <VozContext.Provider value={{ vozDisponible, escuchaActiva, cambiarEscuchaActiva, pausarActivacion }}>
+    <VozContext.Provider value={{ vozDisponible, escuchaActiva, bloqueada, cambiarEscuchaActiva, pausarActivacion }}>
       {children}
     </VozContext.Provider>
   );

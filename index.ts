@@ -6,7 +6,7 @@
  */
 import { registrarWidget } from '@/widget';
 import '@/estudio/campusTarea';
+import 'expo-router/entry';
 
 registrarWidget();
 
-import 'expo-router/entry';

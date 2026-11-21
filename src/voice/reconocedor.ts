@@ -7,6 +7,8 @@
  */
 import { Alert, Platform } from 'react-native';
 
+import { elegirEspanol } from './idiomas';
+
 type Modulo = typeof import('expo-speech-recognition');
 type Sub = { remove: () => void };
 
@@ -23,6 +25,80 @@ try {
 
 /** ¿Se puede usar la voz en esta instalación? (false en Expo Go) */
 export const vozDisponible = mod !== null;
+
+// ---------- Capacidades: ¿se puede reconocer SIN internet? ----------
+
+export type CapacidadesVoz = {
+  /** Hay reconocedor de voz en el celular. */
+  disponible: boolean;
+  /** El español está descargado para reconocer sin internet (el audio no sale del celular). */
+  enDispositivo: boolean;
+  /** Idioma que se usará (ej: 'es-CL', 'es-US'). */
+  idioma: string;
+  /** Idiomas en español que el reconocedor dice soportar. */
+  idiomasEspanol: string[];
+};
+
+const POR_DEFECTO: CapacidadesVoz = { disponible: false, enDispositivo: false, idioma: 'es-CL', idiomasEspanol: [] };
+let capacidades: CapacidadesVoz = { ...POR_DEFECTO, disponible: vozDisponible };
+let revisando: Promise<CapacidadesVoz> | null = null;
+
+/**
+ * Revisa qué puede hacer el reconocedor de ESTE celular: si existe, qué español soporta
+ * y si está descargado para funcionar sin internet. Se guarda en memoria.
+ */
+export function revisarCapacidadesVoz(forzar = false): Promise<CapacidadesVoz> {
+  if (revisando && !forzar) return revisando;
+  revisando = (async () => {
+    if (!mod) return (capacidades = { ...POR_DEFECTO });
+    const M = mod.ExpoSpeechRecognitionModule;
+    let disponible = false;
+    try {
+      disponible = M.isRecognitionAvailable();
+    } catch {
+      disponible = false;
+    }
+    let enDispositivo = false;
+    let idioma = 'es-CL';
+    let idiomasEspanol: string[] = [];
+    try {
+      const todos = await M.getSupportedLocales({});
+      idiomasEspanol = todos.locales.filter((l) => /^es/i.test(l));
+      idioma = elegirEspanol(todos.locales) ?? 'es-CL';
+    } catch {
+      // Android 12 o menos: no informa idiomas. Se usa es-CL.
+    }
+    try {
+      if (M.supportsOnDeviceRecognition()) {
+        const off = await M.getSupportedLocales({ androidRecognitionServicePackage: 'com.google.android.as' }).catch(() => ({ installedLocales: [] as string[], locales: [] }));
+        const local = elegirEspanol(off.installedLocales);
+        if (local) {
+          enDispositivo = true;
+          idioma = local;
+        }
+      }
+    } catch {
+      enDispositivo = false;
+    }
+    capacidades = { disponible, enDispositivo, idioma, idiomasEspanol };
+    return capacidades;
+  })();
+  return revisando;
+}
+
+/** Lo último que se sabe (síncrono). */
+export const capacidadesVoz = () => capacidades;
+
+/** Texto honesto sobre dónde se procesa tu voz. */
+export function textoPrivacidadVoz(c: CapacidadesVoz = capacidades): string {
+  if (!c.disponible) return 'Este celular no tiene reconocimiento de voz disponible. Puedes escribirle a Tinzit0.';
+  return c.enDispositivo
+    ? 'Tu voz se reconoce dentro del celular (español descargado): el audio no sale del teléfono.'
+    : 'El reconocimiento de voz lo hace el servicio de Google del celular y puede usar internet. Para que no salga del teléfono, descarga el español en Ajustes → Google → Voz → Reconocimiento sin conexión. También puedes escribir.';
+}
+
+// Revisión inicial (no bloquea el arranque).
+revisarCapacidadesVoz().catch(() => {});
 
 export function reconocimientoListo(): boolean {
   try {
@@ -50,7 +126,7 @@ export async function pedirPermisoMicrofono(): Promise<boolean> {
   const seguir = await new Promise<boolean>((resolve) =>
     Alert.alert(
       'Tinzit0 quiere escucharte 🎙️',
-      'Necesito el micrófono para entender lo que me pides. Solo escucho mientras ves la animación de "escuchando" (o, si lo activas, mientras la app está abierta para oír "ey Tinzit0"). Tus datos no salen del celular.',
+      `Necesito el micrófono para entender lo que me pides. Solo escucho mientras ves la animación de "escuchando" (o, si lo activas, mientras la app está abierta para oír "ey Tinzit0").\n\n${textoPrivacidadVoz()}`,
       [
         { text: 'Ahora no', style: 'cancel', onPress: () => resolve(false) },
         { text: 'Dale', onPress: () => resolve(true) },
@@ -136,6 +212,11 @@ export function escuchar(op: Opciones): Escucha | null {
       if (!mia()) return;
       // "Sin coincidencias" con algo ya transcrito no es un error para nosotros.
       if ((e.error === 'no-speech' || e.error === 'speech-timeout') && ultimoParcial.trim()) return;
+      // Si el reconocimiento sin internet falla por idioma, la próxima vez se revisa de nuevo.
+      if (e.error === 'language-not-supported' && cap.enDispositivo) {
+        capacidades = { ...capacidades, enDispositivo: false };
+        revisarCapacidadesVoz(true).catch(() => {});
+      }
       if (e.error !== 'aborted') op.onError?.(e.error);
     }),
     M.addListener('end', () => {
@@ -147,8 +228,11 @@ export function escuchar(op: Opciones): Escucha | null {
     }),
   ];
 
+  const cap = capacidades;
   M.start({
-    lang: 'es-CL',
+    lang: cap.idioma,
+    // Si el español está descargado, se exige reconocer dentro del celular (el audio no sale).
+    requiresOnDeviceRecognition: cap.enDispositivo,
     interimResults: true,
     continuous: !!op.continuo,
     maxAlternatives: 1,

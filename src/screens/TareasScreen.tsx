@@ -7,7 +7,7 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 
 import { AppText } from '@/components/AppText';
@@ -83,7 +83,13 @@ export function TareasScreen() {
           : g,
       ),
     );
-    await alternarTarea(db, t, hecha, fecha);
+    try {
+      await alternarTarea(db, t, hecha, fecha);
+    } catch (e) {
+      // Si no se pudo guardar, la pantalla vuelve a mostrar lo que de verdad hay.
+      console.warn(e);
+      Alert.alert('No se pudo guardar', 'Inténtalo de nuevo.');
+    }
     cargar().catch(console.warn);
   };
 

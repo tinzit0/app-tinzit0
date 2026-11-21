@@ -10,6 +10,7 @@
  * llega un último aviso suave pidiéndote que la abras).
  */
 import * as Notifications from 'expo-notifications';
+import { AndroidImportance } from 'expo-notifications';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { Platform } from 'react-native';
 
@@ -24,6 +25,7 @@ import { obtenerProyeccion } from '@/database/finanzas';
 import { completadasEnRango, tareasDelDia } from '@/database/tareas';
 import { consejoClima, diaDe, obtenerClima, resumenCorto } from '@/clima/clima';
 import { toISODate, weekdayMonFirst } from '@/utils/fechas';
+import { conLimite } from '@/utils/red';
 import { datosBienestar, obtenerTarjeta } from '@/database/bienestar';
 import { diaDificil } from '@/bienestar/logica';
 import { mensajeApoyo, mensajeTarjeta, mensajeClase, mensajePreguntaAsistencia, mensajeDomingo, mensajeGastoFijo, mensajeManana, mensajeNoche, mensajePrueba, MENSAJE_PRUEBA } from './mensajes';
@@ -47,7 +49,7 @@ export async function prepararNotificaciones(pedir = true): Promise<boolean> {
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync(CANAL, {
       name: 'Recordatorios de Tinzit0',
-      importance: Notifications.AndroidImportance.HIGH,
+      importance: AndroidImportance.HIGH,
       vibrationPattern: [0, 180, 120, 180],
       lightColor: '#CFF56B',
     });
@@ -136,7 +138,8 @@ export function reprogramarTodo(db: SQLiteDatabase): Promise<void> {
       const diaApoyo = diaDificil(await datosBienestar(db, 60).catch(() => []));
 
       // Pronóstico de 7 días (del caché o de internet). Si no hay conexión, las notificaciones van sin clima.
-      const pronostico = await obtenerClima(db).catch(() => null);
+      // Máximo 4 s: sin internet (o lento) las notificaciones se agendan igual, sin clima.
+      const pronostico = await conLimite(obtenerClima(db), 4000, null);
 
       const hoy = new Date();
       for (let i = 0; i < DIAS_ADELANTE; i++) {

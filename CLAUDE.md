@@ -53,6 +53,11 @@ src/voice/               texto.ts (normalizar, "ey Tinzit0"), interpretar.ts (NL
 src/jarvis/                Asistente estilo Jarvis (gratis, local): Reactor.tsx (HUD SVG animado), Boot.tsx (arranque),
                          PanelHud.tsx + paneles.ts/panelesDatos.ts (datos por intención), persona.ts (estilo jarvis/cercano),
                          colores.ts (colores HUD cambiables por voz). Wake word acepta "Jarvis" y "ey Tinzit0".
+src/ia/                  IA DENTRO DEL CELULAR (gratis): modelo.ts (react-native-executorch 0.11, Qwen3 1.7B XNNPACK,
+                         descarga desde Ajustes, require con try, sesión reutilizada y renovada), parser.ts (<tool_call>).
+                         Una sola herramienta "ejecutar_comando" → pasa por el intérprete de siempre.
+src/voice/reglasExtra.ts  ayuda "¿cómo hago…?", fijos, estadísticas, medallas, récords, rutina por día, tema, temporizador, enseñar/olvidar
+src/voice/similitud.ts + corpus.ts + aprender.ts   entender por parecido y aprender (tabla voice_learned, migración v6)
 src/clima/clima.ts       Open-Meteo (sin key), caché 30 min en settings, Concepción por defecto
 src/widget/              datos.ts, ResumenWidget.tsx, lib.ts (carga segura), index.tsx
 src/theme/               tokens.ts, ThemeProvider.tsx (sistema/claro/oscuro)
@@ -72,6 +77,8 @@ docs/propuestas-icono.png  3 estilos de ícono (por defecto: 1 "Grafito + Lima")
 - Notificaciones: `reprogramarTodo` borra todo lo agendado **excepto** `data.tipo === 'descanso'` (temporizador).
 - Gráficos de categorías: siempre en el orden fijo de `CATEGORIAS`, colores con `colorCategoria(c, isDark)`.
 - Nueva intención del asistente: agregarla en `interpretar.ts` + `ejecutar.ts` + un caso en `scripts/test-voz.ts`.
+- Cerebro del asistente en 3 capas: aprendido → reglas → parecido (≥0.6) → IA en el celular (si está descargada y activa) → "¿Quisiste decir…?". Nunca servicios de pago.
+- react-native-executorch: config `"react-native-executorch": {"features": ["llm"]}` y `allowScripts` en package.json (su postinstall descarga libs nativas); minSdk 26 vía expo-build-properties.
 - Notificaciones con `data.tipo` `descanso` o `recordatorio` no se borran al reprogramar.
 - Correr `npx tsc --noEmit` y `npm test` antes de cada commit. Revisar UI con Playwright en 375 px (modo claro y oscuro).
 

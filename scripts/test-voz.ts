@@ -268,3 +268,17 @@ import { aplicarEstilo } from '../src/jarvis/persona';
   console.log(fallos.length ? `⚠️ Funciones extra: ${bien}/${total}` : `✅ Funciones extra, parecido y aprendizaje: ${bien}/${total}`);
   if (fallos.length) process.exitCode = 1;
 })();
+
+// Lector de llamadas a herramientas de la IA
+import { leerLlamadas } from '../src/ia/parser';
+{
+  const a = leerLlamadas('<tool_call>\n{"name": "ejecutar_comando", "arguments": {"comando": "anota un gasto de 5000 en comida"}}\n</tool_call>');
+  const b = leerLlamadas('<think>pienso…</think>{"name":"ejecutar_comando","arguments":"{\\"comando\\":\\"mis tareas\\"}"}');
+  const c = leerLlamadas('Hola, ¿en qué te ayudo?');
+  const okIA =
+    a?.toolCalls[0]?.function.arguments.comando === 'anota un gasto de 5000 en comida' &&
+    b?.toolCalls[0]?.function.arguments.comando === 'mis tareas' &&
+    c === undefined;
+  console.log(okIA ? '✅ Lector de herramientas de la IA' : `❌ Lector IA: ${JSON.stringify([a, b, c])}`);
+  if (!okIA) process.exitCode = 1;
+}

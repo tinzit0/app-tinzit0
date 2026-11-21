@@ -45,6 +45,7 @@ import { Reactor, type EstadoReactor } from '@/jarvis/Reactor';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fonts } from '@/theme/tokens';
 import type { Sugerencia } from '@/voice/aprender';
+import { iaActivada, liberarIA, preguntarIA } from '@/ia/modelo';
 import { ejecutarAccion } from '@/voice/acciones';
 import { guardarMensaje, mensajesDeHoy, responder, type MensajeChat } from '@/voice/ejecutar';
 import { callar, configurarVoz, hablar } from '@/voice/hablar';
@@ -148,6 +149,7 @@ export function AsistenteScreen() {
       pausarActivacion(false);
       escucha.current?.cancelar();
       callar();
+      liberarIA(); // libera la memoria del modelo de IA al salir
     };
   }, [db, pausarActivacion]);
 
@@ -194,12 +196,21 @@ export function AsistenteScreen() {
       setEstado('pensando');
       await guardarMensaje(db, 'user', limpio);
 
-      const base = await responder(
+      let base = await responder(
         db,
         limpio,
         { ultimo: ultimo.current, sugerencias: duda.current?.sugerencias, pendiente: duda.current?.pendiente },
         { bateria: bateria.current },
       );
+      // 3ª capa: si las reglas no entendieron (o solo tienen opciones dudosas) y la IA está
+      // descargada, le preguntamos a ella. Si responde, no hace falta el "¿Quisiste decir…?".
+      if (base.intencion === 'desconocido' && (await iaActivada(db))) {
+        try {
+          base = await preguntarIA(db, limpio, (c) => responder(db, c, {}, { bateria: bateria.current }));
+        } catch (e) {
+          console.warn('IA no respondió', e);
+        }
+      }
       // Si no entendió, guardamos las opciones para la próxima frase ("la primera").
       duda.current = base.sugerencias?.length && base.pendiente ? { sugerencias: base.sugerencias, pendiente: base.pendiente } : null;
       const r = aplicarEstilo(base, prefs.current.estilo, prefs.current.trato);

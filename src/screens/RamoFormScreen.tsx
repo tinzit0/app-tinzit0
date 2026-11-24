@@ -22,6 +22,7 @@ import {
   eliminarRamo,
   guardarBloques,
   obtenerRamo,
+  TIPOS_BLOQUE,
   type NuevoBloque,
 } from '@/database/estudio';
 import { reprogramarTodo } from '@/notifications/programar';
@@ -79,7 +80,7 @@ export function RamoFormScreen() {
       setSala(r.room ?? '');
       setAprobar(r.passing);
       setAsistencia(r.min_attendance);
-      setBloques((await bloquesDeRamo(db, id)).map((b) => ({ weekday: b.weekday, start_time: b.start_time, end_time: b.end_time, room: b.room })));
+      setBloques((await bloquesDeRamo(db, id)).map((b) => ({ weekday: b.weekday, start_time: b.start_time, end_time: b.end_time, room: b.room, kind: b.kind })));
     })().catch(console.warn);
   }, [db, id]);
 
@@ -106,7 +107,7 @@ export function RamoFormScreen() {
 
   const agregarBloque = () => {
     const ultimo = bloques[bloques.length - 1];
-    setBloques((bs) => [...bs, ultimo ? { ...ultimo, weekday: Math.min(7, ultimo.weekday + 2) } : { weekday: 1, start_time: '08:30', end_time: '10:00', room: null }]);
+    setBloques((bs) => [...bs, ultimo ? { ...ultimo, weekday: Math.min(7, ultimo.weekday + 2) } : { weekday: 1, start_time: '08:30', end_time: '10:00', room: null, kind: 'catedra' }]);
   };
 
   const guardar = async () => {
@@ -164,7 +165,7 @@ export function RamoFormScreen() {
 
         <View style={[styles.section, { gap: space.md }]}>
           <Field label="Profe" value={profe} onChangeText={setProfe} placeholder="Opcional" maxLength={50} />
-          <Field label="Sala" value={sala} onChangeText={setSala} placeholder="Ej: B-204" maxLength={20} autoCapitalize="characters" />
+          <Field label="Sala principal" value={sala} onChangeText={setSala} placeholder="Ej: B-204" maxLength={20} autoCapitalize="characters" />
         </View>
 
         <View style={[styles.section, styles.row]}>
@@ -182,6 +183,11 @@ export function RamoFormScreen() {
                     <Chip key={d.n} compact label={d.c} selected={b.weekday === d.n} onPress={() => setBloques((bs) => bs.map((x, j) => (j === k ? { ...x, weekday: d.n } : x)))} />
                   ))}
                 </View>
+                <View style={[styles.wrap, { marginTop: space.md }]}>
+                  {TIPOS_BLOQUE.map((t) => (
+                    <Chip key={t.value} compact label={t.label} selected={(b.kind ?? 'catedra') === t.value} onPress={() => setBloques((bs) => bs.map((x, j) => (j === k ? { ...x, kind: t.value } : x)))} />
+                  ))}
+                </View>
                 <View style={[styles.row, { marginTop: space.md }]}>
                   <Pressable onPress={() => elegirHora(k, 'start_time')} accessibilityLabel="Hora de inicio" style={[styles.hora, { backgroundColor: colors.surfaceRaised }]}>
                     <AppText variant="caption" tone="tertiary">Desde</AppText>
@@ -194,6 +200,16 @@ export function RamoFormScreen() {
                   <Pressable onPress={() => setBloques((bs) => bs.filter((_, j) => j !== k))} accessibilityLabel="Quitar bloque" hitSlop={8} style={styles.quitar}>
                     <Ionicons name="trash-outline" size={20} color={colors.danger} />
                   </Pressable>
+                </View>
+                <View style={{ marginTop: space.md }}>
+                <Field
+                  label="Sala de este bloque"
+                  value={b.room ?? ''}
+                  onChangeText={(v) => setBloques((bs) => bs.map((x, j) => (j === k ? { ...x, room: v } : x)))}
+                  placeholder={sala ? `Si la dejas vacía: ${sala}` : 'Ej: LAB-3'}
+                  maxLength={20}
+                  autoCapitalize="characters"
+                />
                 </View>
               </View>
             ))}

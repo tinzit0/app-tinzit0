@@ -32,7 +32,18 @@ export type Ramo = {
   min_attendance: number;
 };
 
-export type Bloque = { id: number; course_id: number; weekday: number; start_time: string; end_time: string; room: string | null };
+export type TipoBloque = 'catedra' | 'ayudantia' | 'laboratorio';
+export const TIPOS_BLOQUE: { value: TipoBloque; label: string; corto: string }[] = [
+  { value: 'catedra', label: 'Cátedra', corto: 'Cát.' },
+  { value: 'ayudantia', label: 'Ayudantía', corto: 'Ayud.' },
+  { value: 'laboratorio', label: 'Laboratorio', corto: 'Lab.' },
+];
+export function nombreTipo(t: string | null | undefined, corto = false): string {
+  const x = TIPOS_BLOQUE.find((k) => k.value === t) ?? TIPOS_BLOQUE[0];
+  return corto ? x.corto : x.label;
+}
+
+export type Bloque = { id: number; course_id: number; weekday: number; start_time: string; end_time: string; room: string | null; kind: TipoBloque };
 export type BloqueConRamo = Bloque & { name: string; color: string; sala: string | null };
 
 export type Evaluacion = {
@@ -157,7 +168,46 @@ export async function todosLosBloques(db: SQLiteDatabase): Promise<BloqueConRamo
   );
 }
 
-export type NuevoBloque = { weekday: number; start_time: string; end_time: string; room?: string | null };
+export type NuevoBloque = { weekday: number; start_time: string; end_time: string; room?: string | null; kind?: TipoBloque };
+
+export async function obtenerBloque(db: SQLiteDatabase, id: number): Promise<Bloque | null> {
+  return db.getFirstAsync<Bloque>('SELECT * FROM class_blocks WHERE id = ?', id);
+}
+
+/** Crea un bloque suelto (desde la Agenda). */
+export async function crearBloque(db: SQLiteDatabase, courseId: number, b: NuevoBloque): Promise<number> {
+  const r = await db.runAsync(
+    'INSERT INTO class_blocks (course_id, weekday, start_time, end_time, room, kind) VALUES (?, ?, ?, ?, ?, ?)',
+    courseId,
+    b.weekday,
+    b.start_time,
+    b.end_time,
+    b.room?.trim() || null,
+    b.kind ?? 'catedra',
+  );
+  return r.lastInsertRowId;
+}
+
+export async function actualizarBloque(db: SQLiteDatabase, id: number, courseId: number, b: NuevoBloque) {
+  await db.runAsync(
+    'UPDATE class_blocks SET course_id = ?, weekday = ?, start_time = ?, end_time = ?, room = ?, kind = ? WHERE id = ?',
+    courseId,
+    b.weekday,
+    b.start_time,
+    b.end_time,
+    b.room?.trim() || null,
+    b.kind ?? 'catedra',
+    id,
+  );
+}
+
+export async function eliminarBloque(db: SQLiteDatabase, id: number) {
+  await db.runAsync('DELETE FROM class_blocks WHERE id = ?', id);
+}
+
+export async function cambiarColorRamo(db: SQLiteDatabase, courseId: number, color: string) {
+  await db.runAsync('UPDATE courses SET color = ? WHERE id = ?', color, courseId);
+}
 
 /** Reemplaza todos los bloques de un ramo (todo o nada: si falla, queda el horario anterior). */
 export async function guardarBloques(db: SQLiteDatabase, courseId: number, bloques: NuevoBloque[]) {
@@ -168,12 +218,13 @@ async function guardarBloquesEn(db: SQLiteDatabase, courseId: number, bloques: N
   await db.runAsync('DELETE FROM class_blocks WHERE course_id = ?', courseId);
   for (const b of bloques) {
     await db.runAsync(
-      'INSERT INTO class_blocks (course_id, weekday, start_time, end_time, room) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO class_blocks (course_id, weekday, start_time, end_time, room, kind) VALUES (?, ?, ?, ?, ?, ?)',
       courseId,
       b.weekday,
       b.start_time,
       b.end_time,
       b.room?.trim() || null,
+      b.kind ?? 'catedra',
     );
   }
 }

@@ -27,7 +27,7 @@ export const FUNCIONES: Funcion[] = [
   { titulo: 'Estadísticas', detalle: 'Tu mes vs el anterior', ruta: '/estadisticas', icono: 'stats-chart-outline', palabras: 'numeros mes comparar graficos' },
   { titulo: 'Medallas', detalle: 'Logros desbloqueados', ruta: '/logros', icono: 'trophy-outline', palabras: 'logros premios trofeos' },
   { titulo: 'Estudio', detalle: 'Ramos, notas y pruebas', ruta: '/estudio', icono: 'school-outline', palabras: 'universidad u ramos cursos notas promedio' },
-  { titulo: 'Horario', detalle: 'Tus clases de la semana', ruta: '/horario', icono: 'time-outline', palabras: 'clases sala bloque' },
+  { titulo: 'Agenda de ramos', detalle: 'Tu horario semanal y diario', ruta: '/horario', icono: 'time-outline', palabras: 'horario clases sala bloque catedra ayudantia laboratorio semana dia' },
   { titulo: 'Modo enfoque', detalle: 'Pomodoro para estudiar', ruta: '/pomodoro', icono: 'timer-outline', palabras: 'pomodoro concentracion estudiar temporizador' },
   { titulo: 'Tarjetas de estudio', detalle: 'Repaso con repetición espaciada', ruta: '/tarjetas', icono: 'albums-outline', palabras: 'flashcards memorizar repasar' },
   { titulo: 'Grabar clase', detalle: 'Transcribir lo que dice el profe', ruta: '/grabar', icono: 'mic-outline', palabras: 'dictado transcripcion clase grabar' },

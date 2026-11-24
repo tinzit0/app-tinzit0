@@ -19,7 +19,7 @@ import { fijosQueVencenEn } from '@/database/fijos';
 import { diasEntrenados, rutinaDeHoy } from '@/database/gym';
 import { getSetting } from '@/database/queries';
 import { necesitaRespaldo } from '@/database/respaldo';
-import { minutosEstudio, proximasEvaluaciones, todosLosBloques } from '@/database/estudio';
+import { minutosEstudio, nombreTipo, proximasEvaluaciones, todosLosBloques } from '@/database/estudio';
 import { asistenciaAutoActiva, visitaAbierta } from '@/database/campus';
 import { obtenerProyeccion } from '@/database/finanzas';
 import { completadasEnRango, tareasDelDia } from '@/database/tareas';
@@ -187,7 +187,7 @@ export function reprogramarTodo(db: SQLiteDatabase): Promise<void> {
         // Clases: un aviso unos minutos antes de cada bloque.
         for (const b of bloques.filter((x) => x.weekday === weekdayMonFirst(dia))) {
           const [h, m] = b.start_time.split(':').map(Number);
-          const c = mensajeClase({ ramo: b.name, sala: b.sala, minutos: avisoClase, hora: b.start_time });
+          const c = mensajeClase({ ramo: b.name, sala: b.sala, minutos: avisoClase, hora: b.start_time, tipo: nombreTipo(b.kind) });
           await agendar(c.titulo, c.cuerpo, enFecha(dia, h, m - avisoClase), { ruta: '/horario' });
         }
         // ¿Fuiste? — 5 min después de cada clase sin asistencia registrada.

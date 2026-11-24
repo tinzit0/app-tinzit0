@@ -15,6 +15,7 @@ import {
   resumirTexto,
   tarjetasDesdeTexto,
 } from '../src/estudio/logica';
+import { carriles, diasDeLaSemana, rangoHoras } from '../src/estudio/agenda';
 import { interpretar } from '../src/voice/interpretar';
 import { responder } from '../src/voice/ejecutar';
 import { crearDbPrueba } from './db-prueba';
@@ -130,6 +131,24 @@ for (const [f, tipo, campos] of casos) {
   prueba(`voz: ${f}`, r.tipo === tipo && Object.entries(campos ?? {}).every(([k, v]) => r[k] === v), r);
 }
 
+// ---------- Agenda (grilla semanal) ----------
+{
+  const bs = [
+    { id: 1, weekday: 1, start_time: '08:30', end_time: '10:00' },
+    { id: 2, weekday: 1, start_time: '09:00', end_time: '10:30' },
+    { id: 3, weekday: 1, start_time: '10:30', end_time: '12:00' },
+    { id: 4, weekday: 3, start_time: '19:00', end_time: '20:30' },
+  ];
+  const r = rangoHoras(bs);
+  prueba('agenda: rango 8 a 21', r.desde === 8 && r.hasta === 21, r);
+  prueba('agenda: rango vacío', rangoHoras([]).desde === 8 && rangoHoras([]).hasta === 18);
+  const c = carriles(bs);
+  prueba('agenda: topes lado a lado', c.get(1)?.carril === 0 && c.get(2)?.carril === 1 && c.get(1)?.de === 2 && c.get(2)?.de === 2, [...c]);
+  prueba('agenda: bloque sin tope ocupa todo', c.get(3)?.de === 1 && c.get(4)?.de === 1, [...c]);
+  prueba('agenda: lunes a sábado', diasDeLaSemana(bs).join() === '1,2,3,4,5,6');
+  prueba('agenda: domingo si hay clase', diasDeLaSemana([...bs, { id: 5, weekday: 7, start_time: '10:00', end_time: '11:00' }]).length === 7);
+}
+
 // ---------- Base de datos + ejecutar ----------
 (async () => {
   const db = await crearDbPrueba();
@@ -139,6 +158,19 @@ for (const [f, tipo, campos] of casos) {
   const idCalc = await crearRamo(db, { name: 'Cálculo I', color: '#38BDF8', teacher: null, room: 'B-204', passing: 4, min_attendance: 75 });
   await crearRamo(db, { name: 'Física General', color: '#F59E0B', teacher: null, room: null, passing: 4, min_attendance: 75 });
   await guardarBloques(db, idCalc, [{ weekday: 1, start_time: '08:30', end_time: '10:00' }]);
+  {
+    const { crearBloque, actualizarBloque, obtenerBloque, eliminarBloque, todosLosBloques } = await import('../src/database/estudio');
+    const idLab = await crearBloque(db, idCalc, { weekday: 4, start_time: '14:10', end_time: '15:40', room: 'LAB-3', kind: 'laboratorio' });
+    const lab = await obtenerBloque(db, idLab);
+    prueba('agenda: bloque con tipo y sala', lab?.kind === 'laboratorio' && lab?.room === 'LAB-3', lab);
+    await actualizarBloque(db, idLab, idCalc, { weekday: 5, start_time: '14:10', end_time: '15:40', room: '', kind: 'ayudantia' });
+    const todos = await todosLosBloques(db);
+    const ay = todos.find((x) => x.id === idLab);
+    prueba('agenda: sala vacía usa la del ramo', ay?.sala === 'B-204' && ay?.kind === 'ayudantia' && ay?.weekday === 5, ay);
+    prueba('agenda: bloque antiguo es cátedra', todos.find((x) => x.id !== idLab)?.kind === 'catedra');
+    await eliminarBloque(db, idLab);
+    prueba('agenda: quitar bloque', (await todosLosBloques(db)).length === 1);
+  }
   await crearEvaluacion(db, { course_id: idCalc, name: 'Prueba 1', weight: 30, grade: 3.5, date: null, study_hours: 0 });
   await crearEvaluacion(db, { course_id: idCalc, name: 'Prueba 2', weight: 30, grade: 4, date: null, study_hours: 0 });
   await crearEvaluacion(db, { course_id: idCalc, name: 'Examen', weight: 40, grade: null, date: null, study_hours: 0 });

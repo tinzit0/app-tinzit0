@@ -98,9 +98,9 @@ export const MENSAJE_PRUEBA = {
   cuerpo: 'Así te voy a ir hablando. Si ves esto, las notificaciones funcionan perfecto.',
 };
 
-export function mensajeClase(p: { ramo: string; sala: string | null; minutos: number; hora: string }) {
+export function mensajeClase(p: { ramo: string; sala: string | null; minutos: number; hora: string; tipo?: string }) {
   return {
-    titulo: `📚 ${p.ramo} en ${p.minutos} min`,
+    titulo: `📚 ${p.tipo && p.tipo !== 'Cátedra' ? `${p.tipo} de ` : ''}${p.ramo} en ${p.minutos} min`,
     cuerpo: `A las ${p.hora}${p.sala ? ` en la sala ${p.sala}` : ''}. ${alAzar(['¡Vamos que se puede!', 'Llega con tiempo 🏃', 'Tú dale 💪'])}`,
   };
 }

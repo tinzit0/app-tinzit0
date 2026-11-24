@@ -32,7 +32,7 @@ import { fechaCorta, fromISODate, nombreDiaMonFirst, toISODate } from '@/utils/f
 type Icono = keyof typeof Ionicons.glyphMap;
 
 const HERRAMIENTAS: { icon: Icono; label: string; ruta: string }[] = [
-  { icon: 'calendar-outline', label: 'Horario', ruta: '/horario' },
+  { icon: 'calendar-outline', label: 'Agenda', ruta: '/horario' },
   { icon: 'timer-outline', label: 'Enfoque', ruta: '/pomodoro' },
   { icon: 'albums-outline', label: 'Tarjetas', ruta: '/tarjetas' },
   { icon: 'mic-outline', label: 'Grabar clase', ruta: '/grabar' },

@@ -343,6 +343,11 @@ const MIGRATIONS: string[] = [
   -- Días en que toca el hábito: '1,3,5' (lunes=1 … domingo=7). NULL = todos los días.
   ALTER TABLE habits ADD COLUMN days TEXT;
   `,
+
+  // v11 — Agenda: cada bloque de clase tiene su tipo (cátedra, ayudantía o laboratorio) y su propia sala.
+  `
+  ALTER TABLE class_blocks ADD COLUMN kind TEXT NOT NULL DEFAULT 'catedra';  -- 'catedra' | 'ayudantia' | 'laboratorio'
+  `,
 ];
 
 /** Se llama una vez al abrir la app (desde SQLiteProvider en el _layout raíz). */

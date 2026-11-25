@@ -34,7 +34,7 @@ import {
   buscarRamo,
   contarPendientes,
   crearEvaluacion,
-  evaluacionesDeRamo,
+  evaluacionesConNotaDirecta,
   listarRamos,
   marcarAsistencia,
   minutosEstudio,
@@ -887,7 +887,7 @@ export async function ejecutar(db: SQLiteDatabase, i: Intencion, sistema: Sistem
     case 'nota_agregar': {
       const ramo = await buscarRamo(db, i.ramo);
       if (!ramo) return { texto: `No tengo el ramo "${i.ramo}". Créalo en Estudio y vuelve a decírmelo.`, ruta: '/estudio' };
-      const evals = await evaluacionesDeRamo(db, ramo.id);
+      const evals = await evaluacionesConNotaDirecta(db, ramo.id);
       // Si nombraste la evaluación, la buscamos; si no, la primera sin nota que ya pasó.
       const nombrada = i.evaluacion;
       const buscada = nombrada

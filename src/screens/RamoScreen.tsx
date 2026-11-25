@@ -18,14 +18,16 @@ import {
   bloquesDeRamo,
   evaluacionesDeRamo,
   marcarAsistencia,
+  nombreTipo,
   obtenerRamo,
   quitarAsistencia,
   resumenRamo,
+  subnotasDeRamo,
   type Bloque,
   type Evaluacion,
   type RamoResumen,
 } from '@/database/estudio';
-import { formatoNota, textoNecesaria } from '@/estudio/logica';
+import { formatoNota, notaDeSubnotas, textoNecesaria } from '@/estudio/logica';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, space } from '@/theme/tokens';
 import { fechaCorta, fromISODate, nombreDiaMonFirst, toISODate } from '@/utils/fechas';
@@ -40,15 +42,17 @@ export function RamoScreen() {
   const id = Number(idParam);
   const [ramo, setRamo] = useState<RamoResumen | null>(null);
   const [evals, setEvals] = useState<Evaluacion[]>([]);
+  const [subnotas, setSubnotas] = useState<Evaluacion[]>([]);
   const [bloques, setBloques] = useState<Bloque[]>([]);
   const [hoyMarcado, setHoyMarcado] = useState<boolean | null>(null);
 
   const cargar = useCallback(async () => {
     const r = await obtenerRamo(db, id);
     if (!r) return;
-    const [res, e, b, a] = await Promise.all([resumenRamo(db, r), evaluacionesDeRamo(db, id), bloquesDeRamo(db, id), asistenciaDeRamo(db, id)]);
+    const [res, e, b, a, s] = await Promise.all([resumenRamo(db, r), evaluacionesDeRamo(db, id), bloquesDeRamo(db, id), asistenciaDeRamo(db, id), subnotasDeRamo(db, id)]);
     setRamo(res);
     setEvals(e);
+    setSubnotas(s);
     setBloques(b);
     const hoy = a.find((x) => x.date === toISODate());
     setHoyMarcado(hoy ? hoy.present === 1 : null);
@@ -117,25 +121,64 @@ export function RamoScreen() {
           </View>
           {evals.length ? (
             <Card style={{ paddingVertical: space.sm }}>
-              {evals.map((e, k) => (
-                <PressableScale
-              accessibilityRole="button"
-                  key={e.id}
-                  onPress={() => router.push({ pathname: '/evaluacion', params: { id: String(e.id) } })}
-                  accessibilityLabel={`${e.name}, nota ${formatoNota(e.grade)}`}
-                  style={[styles.item, k > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}
-                >
-                  <View style={{ flex: 1 }}>
-                    <AppText variant="callout" numberOfLines={1}>{e.name}</AppText>
-                    <AppText variant="caption" tone="tertiary" numberOfLines={1}>
-                      {[e.weight > 0 ? `${Math.round(e.weight)}%` : null, e.date ? fechaCorta(fromISODate(e.date)) : null].filter(Boolean).join(' · ') || 'Sin ponderación'}
-                    </AppText>
+              {evals.map((e, k) => {
+                const hijas = subnotas.filter((s) => s.parent_id === e.id);
+                const sub = hijas.length ? notaDeSubnotas(hijas) : null;
+                // Con subnotas a medias mostramos cómo vas (en gris), sin que cuente todavía.
+                const mostrar = e.grade ?? sub?.parcial ?? null;
+                return (
+                  <View key={e.id} style={k > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border } : undefined}>
+                    <PressableScale
+                      accessibilityRole="button"
+                      onPress={() => router.push({ pathname: '/evaluacion', params: { id: String(e.id) } })}
+                      accessibilityLabel={`${e.name}, nota ${formatoNota(mostrar)}${sub && e.grade == null ? ', parcial' : ''}`}
+                      style={styles.item}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <AppText variant="callout" numberOfLines={1}>{e.name}</AppText>
+                        <AppText variant="caption" tone="tertiary" numberOfLines={1}>
+                          {[
+                            e.weight > 0 ? `${Math.round(e.weight)}%` : null,
+                            sub ? `${sub.conNota} de ${sub.total} ${sub.total === 1 ? 'subnota' : 'subnotas'}` : null,
+                            e.date ? fechaCorta(fromISODate(e.date)) : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ') || 'Sin ponderación'}
+                        </AppText>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        {sub && e.grade == null && sub.parcial != null ? (
+                          <AppText variant="caption" tone="tertiary">vas en</AppText>
+                        ) : null}
+                        <AppText variant="headline" tabular tone={e.grade == null ? 'tertiary' : e.grade < ramo.passing ? 'danger' : 'primary'}>
+                          {formatoNota(mostrar)}
+                        </AppText>
+                      </View>
+                    </PressableScale>
+                    {hijas.map((s) => (
+                      <PressableScale
+                        key={s.id}
+                        accessibilityRole="button"
+                        onPress={() => router.push({ pathname: '/evaluacion', params: { id: String(s.id) } })}
+                        accessibilityLabel={`Subnota ${s.name} de ${e.name}, nota ${formatoNota(s.grade)}`}
+                        style={[styles.subitem, { borderLeftColor: ramo.color }]}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <AppText variant="caption" numberOfLines={1}>{s.name}</AppText>
+                          {s.weight > 0 || s.date ? (
+                            <AppText variant="caption" tone="tertiary" numberOfLines={1}>
+                              {[s.weight > 0 ? `${Math.round(s.weight)}% de ${e.name}` : null, s.date ? fechaCorta(fromISODate(s.date)) : null].filter(Boolean).join(' · ')}
+                            </AppText>
+                          ) : null}
+                        </View>
+                        <AppText variant="callout" tabular tone={s.grade == null ? 'tertiary' : s.grade < ramo.passing ? 'danger' : 'secondary'}>
+                          {formatoNota(s.grade)}
+                        </AppText>
+                      </PressableScale>
+                    ))}
                   </View>
-                  <AppText variant="headline" tabular tone={e.grade == null ? 'tertiary' : e.grade < ramo.passing ? 'danger' : 'primary'}>
-                    {formatoNota(e.grade)}
-                  </AppText>
-                </PressableScale>
-              ))}
+                );
+              })}
             </Card>
           ) : (
             <AppText variant="callout" tone="secondary">Agrega tus pruebas, controles y trabajos con su ponderación.</AppText>
@@ -170,7 +213,10 @@ export function RamoScreen() {
               {bloques.map((b) => (
                 <View key={b.id} style={[styles.bloque, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   <AppText variant="callout" style={{ width: 92 }}>{mayus(nombreDiaMonFirst(b.weekday))}</AppText>
-                  <AppText variant="callout" tone="secondary" tabular style={{ flex: 1 }}>{b.start_time} – {b.end_time}</AppText>
+                  <View style={{ flex: 1 }}>
+                    <AppText variant="callout" tone="secondary" tabular>{b.start_time} – {b.end_time}</AppText>
+                    <AppText variant="caption" tone="tertiary">{nombreTipo(b.kind)}</AppText>
+                  </View>
                   {b.room || ramo.room ? <AppText variant="caption" tone="tertiary">Sala {b.room ?? ramo.room}</AppText> : null}
                 </View>
               ))}
@@ -201,5 +247,6 @@ const styles = StyleSheet.create({
   seccion: { marginTop: space.xxl },
   cabecera: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.md, gap: space.md },
   item: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md },
+  subitem: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.sm, paddingLeft: space.md, marginLeft: space.xs, marginBottom: space.xs, borderLeftWidth: 2 },
   bloque: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg, borderRadius: radius.md, borderWidth: 1 },
 });

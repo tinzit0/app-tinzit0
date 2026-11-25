@@ -348,6 +348,13 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE class_blocks ADD COLUMN kind TEXT NOT NULL DEFAULT 'catedra';  -- 'catedra' | 'ayudantia' | 'laboratorio'
   `,
+
+  // v12 — Subnotas: una evaluación puede estar formada por otras (ej: "Controles 10%" = promedio de 4 controles).
+  // La nota de la evaluación "padre" se calcula sola con sus subnotas.
+  `
+  ALTER TABLE evaluations ADD COLUMN parent_id INTEGER REFERENCES evaluations(id) ON DELETE CASCADE;
+  CREATE INDEX IF NOT EXISTS idx_eval_parent ON evaluations(parent_id);
+  `,
 ];
 
 /** Se llama una vez al abrir la app (desde SQLiteProvider en el _layout raíz). */

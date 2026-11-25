@@ -8,6 +8,7 @@ import {
   claseAhora,
   formatoNota,
   leerNota,
+  notaDeSubnotas,
   notaNecesaria,
   planEstudio,
   promedio,
@@ -131,6 +132,17 @@ for (const [f, tipo, campos] of casos) {
   prueba(`voz: ${f}`, r.tipo === tipo && Object.entries(campos ?? {}).every(([k, v]) => r[k] === v), r);
 }
 
+// ---------- Subnotas (puras) ----------
+{
+  const a = notaDeSubnotas([{ weight: 0, grade: 5 }, { weight: 0, grade: 6 }, { weight: 0, grade: null }]);
+  prueba('subnotas: incompleta no cuenta', a.nota === null && a.parcial === 5.5 && a.conNota === 2 && a.total === 3, a);
+  const b = notaDeSubnotas([{ weight: 0, grade: 5 }, { weight: 0, grade: 6 }, { weight: 0, grade: 7 }]);
+  prueba('subnotas: promedio simple', b.nota === 6, b);
+  const c = notaDeSubnotas([{ weight: 25, grade: 4 }, { weight: 75, grade: 6 }]);
+  prueba('subnotas: con peso', c.nota === 5.5, c);
+  prueba('subnotas: vacía', notaDeSubnotas([]).nota === null);
+}
+
 // ---------- Agenda (grilla semanal) ----------
 {
   const bs = [
@@ -174,6 +186,32 @@ for (const [f, tipo, campos] of casos) {
   await crearEvaluacion(db, { course_id: idCalc, name: 'Prueba 1', weight: 30, grade: 3.5, date: null, study_hours: 0 });
   await crearEvaluacion(db, { course_id: idCalc, name: 'Prueba 2', weight: 30, grade: 4, date: null, study_hours: 0 });
   await crearEvaluacion(db, { course_id: idCalc, name: 'Examen', weight: 40, grade: null, date: null, study_hours: 0 });
+
+  {
+    // Subnotas en la base: "Controles" (10%) = promedio de 2 controles, en un ramo aparte para no mover los demás casos.
+    const { crearEvaluacion: crear, ponerNota: poner, obtenerEvaluacion: obtener, evaluacionesDeRamo: deRamo, subnotasDe, eliminarEvaluacion: eliminar, resumenRamo: resumen, obtenerRamo: ramoDe } =
+      await import('../src/database/estudio');
+    const idProg = await crearRamo(db, { name: 'Programación', color: '#A78BFA', teacher: null, room: null, passing: 4, min_attendance: 75 });
+    await crear(db, { course_id: idProg, name: 'Prueba', weight: 90, grade: 5, date: null, study_hours: 0 });
+    const idCtrl = await crear(db, { course_id: idProg, name: 'Controles', weight: 10, grade: null, date: null, study_hours: 0 });
+    const c1 = await crear(db, { course_id: 0, name: 'Control 1', weight: 0, grade: 6, date: null, study_hours: 0, parent_id: idCtrl });
+    const c2 = await crear(db, { course_id: 0, name: 'Control 2', weight: 0, grade: null, date: null, study_hours: 0, parent_id: idCtrl });
+    prueba('subnotas db: hereda el ramo', (await obtener(db, c1))?.course_id === idProg);
+    prueba('subnotas db: incompleta → padre sin nota', (await obtener(db, idCtrl))?.grade === null);
+    prueba('subnotas db: no salen como evaluación del ramo', (await deRamo(db, idProg)).length === 2);
+    await poner(db, c2, 7);
+    prueba('subnotas db: completa → padre 6,5', (await obtener(db, idCtrl))?.grade === 6.5, await obtener(db, idCtrl));
+    const rp = await ramoDe(db, idProg);
+    const res = rp ? await resumen(db, rp) : null;
+    prueba('subnotas db: promedio del ramo usa la calculada', Math.abs((res?.promedio ?? 0) - (5 * 0.9 + 6.5 * 0.1)) < 1e-9, res?.promedio);
+    const vz = await responder(db, 'me saqué un 4 en programación');
+    prueba('subnotas voz: no pisa la evaluación calculada', (await obtener(db, idCtrl))?.grade === 6.5, vz.texto);
+    await eliminar(db, c2);
+    prueba('subnotas db: quitar una recalcula', (await obtener(db, idCtrl))?.grade === 6);
+    await eliminar(db, idCtrl);
+    prueba('subnotas db: borrar padre borra subnotas', (await obtener(db, c1)) === null && (await subnotasDe(db, idCtrl)).length === 0);    const { eliminarRamo } = await import('../src/database/estudio');
+    await eliminarRamo(db, idProg); // para no mover los casos de abajo
+  }
 
   const a = await responder(db, 'cómo voy en cálculo');
   prueba('resp: promedio cálculo', /3,8/.test(a.texto) && /4,4/.test(a.texto), a.texto);

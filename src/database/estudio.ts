@@ -8,6 +8,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import {
   buscarRamoPorNombre,
   formatoHoras,
+  notaDeSubnotas,
   notaNecesaria,
   planEstudio,
   porcentajeAsistencia,
@@ -54,6 +55,8 @@ export type Evaluacion = {
   grade: number | null;
   date: string | null;
   study_hours: number;
+  /** Si es una subnota: la evaluación a la que pertenece. */
+  parent_id: number | null;
 };
 export type EvaluacionConRamo = Evaluacion & { ramo: string; color: string };
 
@@ -76,7 +79,7 @@ export async function listarRamosSimple(db: SQLiteDatabase): Promise<Ramo[]> {
 export async function listarRamos(db: SQLiteDatabase): Promise<RamoResumen[]> {
   const [ramos, evals, asis] = await Promise.all([
     listarRamosSimple(db),
-    db.getAllAsync<Evaluacion>('SELECT * FROM evaluations ORDER BY (date IS NULL), date, id'),
+    db.getAllAsync<Evaluacion>('SELECT * FROM evaluations WHERE parent_id IS NULL ORDER BY (date IS NULL), date, id'),
     db.getAllAsync<{ course_id: number; total: number; presentes: number }>(
       'SELECT course_id, COUNT(*) AS total, COALESCE(SUM(present), 0) AS presentes FROM attendance GROUP BY course_id',
     ),
@@ -142,7 +145,7 @@ export async function actualizarRamo(db: SQLiteDatabase, id: number, r: NuevoRam
 
 export async function eliminarRamo(db: SQLiteDatabase, id: number) {
   await transaccion(db, async (tx) => {
-    const evals = await evaluacionesDeRamo(tx, id);
+    const evals = await tx.getAllAsync<{ id: number }>('SELECT id FROM evaluations WHERE course_id = ?', id);
     for (const e of evals) await borrarPlan(tx, e.id);
     await tx.runAsync('DELETE FROM courses WHERE id = ?', id);
   });
@@ -231,11 +234,43 @@ async function guardarBloquesEn(db: SQLiteDatabase, courseId: number, bloques: N
 
 // ---------- Evaluaciones ----------
 
+/** Evaluaciones del ramo (las que cuentan para el promedio; las subnotas van dentro de su evaluación). */
 export async function evaluacionesDeRamo(db: SQLiteDatabase, courseId: number): Promise<Evaluacion[]> {
   return db.getAllAsync<Evaluacion>(
-    'SELECT * FROM evaluations WHERE course_id = ? ORDER BY (date IS NULL), date, id',
+    'SELECT * FROM evaluations WHERE course_id = ? AND parent_id IS NULL ORDER BY (date IS NULL), date, id',
     courseId,
   );
+}
+
+/** Subnotas de una evaluación. */
+export async function subnotasDe(db: SQLiteDatabase, parentId: number): Promise<Evaluacion[]> {
+  return db.getAllAsync<Evaluacion>('SELECT * FROM evaluations WHERE parent_id = ? ORDER BY (date IS NULL), date, id', parentId);
+}
+
+/** Todas las subnotas de un ramo (para mostrarlas agrupadas). */
+export async function subnotasDeRamo(db: SQLiteDatabase, courseId: number): Promise<Evaluacion[]> {
+  return db.getAllAsync<Evaluacion>('SELECT * FROM evaluations WHERE course_id = ? AND parent_id IS NOT NULL ORDER BY (date IS NULL), date, id', courseId);
+}
+
+/** Evaluaciones a las que se les puede poner nota directo (todas menos las que se calculan con subnotas). */
+export async function evaluacionesConNotaDirecta(db: SQLiteDatabase, courseId: number): Promise<Evaluacion[]> {
+  return db.getAllAsync<Evaluacion>(
+    `SELECT * FROM evaluations e WHERE course_id = ?
+       AND NOT EXISTS (SELECT 1 FROM evaluations s WHERE s.parent_id = e.id)
+     ORDER BY (date IS NULL), date, id`,
+    courseId,
+  );
+}
+
+/** Recalcula la nota de una evaluación a partir de sus subnotas (si tiene). */
+async function recalcularPadre(db: SQLiteDatabase, parentId: number | null | undefined) {
+  if (!parentId) return;
+  const subs = await subnotasDe(db, parentId);
+  if (!subs.length) return;
+  const { nota } = notaDeSubnotas(subs);
+  await db.runAsync('UPDATE evaluations SET grade = ? WHERE id = ?', nota, parentId);
+  // Con la nota completa ya no hace falta seguir el plan de estudio de la evaluación grande.
+  if (nota != null) await borrarPlan(db, parentId);
 }
 
 export async function obtenerEvaluacion(db: SQLiteDatabase, id: number): Promise<Evaluacion | null> {
@@ -254,21 +289,24 @@ export async function proximasEvaluaciones(db: SQLiteDatabase, dias = 30, desde 
   );
 }
 
-export type NuevaEvaluacion = Omit<Evaluacion, 'id'>;
+export type NuevaEvaluacion = Omit<Evaluacion, 'id' | 'parent_id'> & { parent_id?: number | null };
 
 /** Crea la evaluación y su plan de estudio juntos (si algo falla, no queda nada a medias). */
 export async function crearEvaluacion(db: SQLiteDatabase, e: NuevaEvaluacion, hoy = new Date()): Promise<number> {
   return transaccion(db, async (tx) => {
+    const padre = e.parent_id ? await obtenerEvaluacion(tx, e.parent_id) : null;
     const x = await tx.runAsync(
-      'INSERT INTO evaluations (course_id, name, weight, grade, date, study_hours) VALUES (?, ?, ?, ?, ?, ?)',
-      e.course_id,
+      'INSERT INTO evaluations (course_id, name, weight, grade, date, study_hours, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      padre?.course_id ?? e.course_id,
       e.name.trim(),
       e.weight,
       e.grade,
       e.date,
       e.study_hours,
+      padre?.id ?? null,
     );
     await rehacerPlanEn(tx, x.lastInsertRowId, hoy);
+    await recalcularPadre(tx, padre?.id);
     return x.lastInsertRowId;
   });
 }
@@ -285,7 +323,10 @@ export async function actualizarEvaluacion(db: SQLiteDatabase, id: number, e: Nu
       e.study_hours,
       id,
     );
+    // Si tiene subnotas, su nota la mandan ellas (no la que venga del formulario).
+    await recalcularPadre(tx, id);
     await rehacerPlanEn(tx, id, hoy);
+    await recalcularPadre(tx, (await obtenerEvaluacion(tx, id))?.parent_id);
   });
 }
 
@@ -295,13 +336,19 @@ export async function ponerNota(db: SQLiteDatabase, id: number, nota: number | n
     await tx.runAsync('UPDATE evaluations SET grade = ? WHERE id = ?', nota, id);
     // Con nota puesta, ya no tiene sentido seguir estudiando para esa prueba.
     if (nota != null) await borrarPlan(tx, id);
+    await recalcularPadre(tx, (await obtenerEvaluacion(tx, id))?.parent_id);
   });
 }
 
 export async function eliminarEvaluacion(db: SQLiteDatabase, id: number) {
   await transaccion(db, async (tx) => {
+    const ev = await obtenerEvaluacion(tx, id);
+    for (const s of await subnotasDe(tx, id)) await borrarPlan(tx, s.id);
     await borrarPlan(tx, id);
+    await tx.runAsync('DELETE FROM evaluations WHERE parent_id = ?', id);
     await tx.runAsync('DELETE FROM evaluations WHERE id = ?', id);
+    // Si quedan otras subnotas, la evaluación grande se recalcula; si era la última, vuelve a ser nota a mano.
+    if (ev?.parent_id) await recalcularPadre(tx, ev.parent_id);
   });
 }
 

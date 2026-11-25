@@ -54,6 +54,25 @@ export function promedio(evals: EvalNota[]): number | null {
   return conNota.reduce((s, e) => s + e.grade, 0) / conNota.length;
 }
 
+/**
+ * Subnotas: una evaluación (ej: "Controles", 10% del ramo) puede ser el promedio de varias notas.
+ * Cada subnota tiene su peso DENTRO de la evaluación (0 en todas = promedio simple).
+ * - nota: la nota final de la evaluación, solo cuando todas las subnotas tienen nota
+ *   (así el "¿cuánto necesito?" no se engaña con una nota a medias).
+ * - parcial: cómo vas con las que ya tienen nota (para mostrarlo en pantalla).
+ */
+export function notaDeSubnotas(subnotas: EvalNota[]): { nota: number | null; parcial: number | null; conNota: number; total: number } {
+  const conNota = subnotas.filter((e) => e.grade != null).length;
+  const parcial = promedio(subnotas);
+  const redondear = (n: number | null) => (n == null ? null : Math.round(n * 100) / 100);
+  return {
+    nota: subnotas.length > 0 && conNota === subnotas.length ? redondear(parcial) : null,
+    parcial: redondear(parcial),
+    conNota,
+    total: subnotas.length,
+  };
+}
+
 export type Necesaria =
   | { estado: 'sin_datos' }
   | { estado: 'sin_restante'; final: number; aprobado: boolean }

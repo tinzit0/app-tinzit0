@@ -355,6 +355,21 @@ const MIGRATIONS: string[] = [
   ALTER TABLE evaluations ADD COLUMN parent_id INTEGER REFERENCES evaluations(id) ON DELETE CASCADE;
   CREATE INDEX IF NOT EXISTS idx_eval_parent ON evaluations(parent_id);
   `,
+
+  // v13 — Malla interactiva: los ramos de la carrera con semestre, créditos y prerrequisitos.
+  // Cada teléfono tiene su propia malla (el nombre de la carrera va en settings: malla_nombre).
+  `
+  CREATE TABLE IF NOT EXISTS curriculum_courses (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    name     TEXT NOT NULL,
+    semester INTEGER NOT NULL DEFAULT 1,
+    credits  INTEGER NOT NULL DEFAULT 0,          -- créditos SCT
+    area     TEXT,
+    prereqs  TEXT NOT NULL DEFAULT '',            -- ids de curriculum_courses separados por coma
+    status   TEXT NOT NULL DEFAULT 'pendiente'    -- 'pendiente' | 'cursando' | 'aprobado'
+  );
+  CREATE INDEX IF NOT EXISTS idx_curr_sem ON curriculum_courses(semester);
+  `,
 ];
 
 /** Se llama una vez al abrir la app (desde SQLiteProvider en el _layout raíz). */

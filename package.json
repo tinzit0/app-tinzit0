@@ -63,7 +63,7 @@
     "android": "expo start --android",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
-    "test": "tsx scripts/test-db.ts && tsx scripts/test-voz.ts && tsx scripts/test-estudio.ts && tsx scripts/test-finanzas.ts && tsx scripts/test-bienestar.ts && tsx scripts/test-integridad.ts && tsx scripts/test-privacidad.ts && tsx scripts/test-flujos.ts && tsx scripts/test-funciones.ts"
+    "test": "tsx scripts/test-db.ts && tsx scripts/test-voz.ts && tsx scripts/test-estudio.ts && tsx scripts/test-finanzas.ts && tsx scripts/test-bienestar.ts && tsx scripts/test-integridad.ts && tsx scripts/test-privacidad.ts && tsx scripts/test-flujos.ts && tsx scripts/test-funciones.ts && tsx scripts/test-malla.ts"
   },
   "private": true,
   "react-native-executorch": {

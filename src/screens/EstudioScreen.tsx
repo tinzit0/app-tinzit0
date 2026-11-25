@@ -33,6 +33,7 @@ type Icono = keyof typeof Ionicons.glyphMap;
 
 const HERRAMIENTAS: { icon: Icono; label: string; ruta: string }[] = [
   { icon: 'calendar-outline', label: 'Agenda', ruta: '/horario' },
+  { icon: 'git-network-outline', label: 'Malla', ruta: '/malla' },
   { icon: 'timer-outline', label: 'Enfoque', ruta: '/pomodoro' },
   { icon: 'albums-outline', label: 'Tarjetas', ruta: '/tarjetas' },
   { icon: 'mic-outline', label: 'Grabar clase', ruta: '/grabar' },

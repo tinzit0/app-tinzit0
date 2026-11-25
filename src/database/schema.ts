@@ -389,6 +389,21 @@ const MIGRATIONS: string[] = [
   );
   INSERT OR IGNORE INTO settings (key, value) VALUES ('chanchito_meta', '0');
   `,
+
+  // v16 — Agua: cada vaso que tomas, meta diaria y recordatorios configurables.
+  `
+  CREATE TABLE IF NOT EXISTS water_logs (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    ml         INTEGER NOT NULL,
+    date       TEXT NOT NULL,                    -- 'YYYY-MM-DD'
+    time       TEXT NOT NULL,                    -- 'HH:MM'
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_water_date ON water_logs(date);
+  INSERT OR IGNORE INTO settings (key, value) VALUES
+    ('agua_meta_ml', '2000'), ('agua_vaso_ml', '250'), ('notif_agua', '0'),
+    ('agua_cada_min', '90'), ('agua_desde', '08:00'), ('agua_hasta', '22:00'), ('agua_pausa_hasta', '');
+  `,
 ];
 
 /** Se llama una vez al abrir la app (desde SQLiteProvider en el _layout raíz). */

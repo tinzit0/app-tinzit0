@@ -23,12 +23,14 @@ import { minutosEstudio, nombreTipo, proximasEvaluaciones, todosLosBloques } fro
 import { asistenciaAutoActiva, visitaAbierta } from '@/database/campus';
 import { obtenerProyeccion } from '@/database/finanzas';
 import { completadasEnRango, momentoAlarma, tareasDelDia } from '@/database/tareas';
+import { aguaDelDia, ajustesAgua } from '@/database/agua';
+import { enPausa, horasRecordatorio } from '@/agua/logica';
 import { consejoClima, diaDe, obtenerClima, resumenCorto } from '@/clima/clima';
 import { toISODate, weekdayMonFirst } from '@/utils/fechas';
 import { conLimite } from '@/utils/red';
 import { datosBienestar, obtenerTarjeta } from '@/database/bienestar';
 import { diaDificil } from '@/bienestar/logica';
-import { mensajeApoyo, mensajeTarea, mensajeTarjeta, mensajeClase, mensajePreguntaAsistencia, mensajeDomingo, mensajeGastoFijo, mensajeManana, mensajeNoche, mensajePrueba, MENSAJE_PRUEBA } from './mensajes';
+import { mensajeAgua, mensajeApoyo, mensajeTarea, mensajeTarjeta, mensajeClase, mensajePreguntaAsistencia, mensajeDomingo, mensajeGastoFijo, mensajeManana, mensajeNoche, mensajePrueba, MENSAJE_PRUEBA } from './mensajes';
 
 const CANAL = 'tinzit0';
 const DIAS_ADELANTE = 7;
@@ -233,6 +235,22 @@ export function reprogramarTodo(db: SQLiteDatabase): Promise<void> {
           for (const f of await fijosQueVencenEn(db, manianaDe)) {
             const g = mensajeGastoFijo({ nombre: f.name, monto: f.amount });
             await agendar(g.titulo, g.cuerpo, enFecha(dia, manana.h, manana.m + 1), { ruta: '/gastos' });
+          }
+        }
+      }
+
+      // Agua: recordatorios solo para hoy y mañana (Android limita cuántas alarmas puede tener una app).
+      // Hoy, si ya cumpliste la meta, no te molesto más.
+      const agua = await ajustesAgua(db);
+      if (agua.avisos) {
+        const llevasHoy = await aguaDelDia(db);
+        for (let i = 0; i < 2; i++) {
+          if (i === 0 && llevasHoy >= agua.metaMl) continue;
+          const dia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + i);
+          for (const cuando of horasRecordatorio(agua, dia)) {
+            if (enPausa(cuando, agua.pausaHasta)) continue;
+            const m = mensajeAgua();
+            await agendar(m.titulo, m.cuerpo, cuando, { ruta: '/agua', tipo: 'agua' });
           }
         }
       }

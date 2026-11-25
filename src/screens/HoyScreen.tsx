@@ -4,6 +4,7 @@
  * tus hábitos y tus apps favoritas.
  */
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { Fragment, useCallback, useEffect, useState, type ReactNode } from 'react';
@@ -29,6 +30,8 @@ import { obtenerProyeccion } from '@/database/finanzas';
 import { obtenerTarjeta } from '@/database/bienestar';
 import { textoAnimo } from '@/bienestar/logica';
 import { leerModulos, type IdModulo, type ModuloInicio } from '@/inicio/modulos';
+import { aguaDelDia, ajustesAgua, tomarAgua } from '@/database/agua';
+import { formatoMl } from '@/agua/logica';
 import { PressableScale } from '@/components/PressableScale';
 import { necesitaRespaldo } from '@/database/respaldo';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -63,6 +66,7 @@ export function HoyScreen() {
   const [quedaHoy, setQuedaHoy] = useState<number | null>(null);
   const [animoHoy, setAnimoHoy] = useState<number | null>(null);
   const [modulos, setModulos] = useState<ModuloInicio[]>(() => leerModulos(null));
+  const [agua, setAgua] = useState<{ ml: number; meta: number; vaso: number } | null>(null);
   const { revisar } = useLogros();
 
   // Primera vez con la app vacía: configuración inicial breve (opcional).
@@ -87,6 +91,9 @@ export function HoyScreen() {
         })
         .catch(() => setClimaCargado(true));
       todosLosBloques(db).then(setBloques).catch(console.warn);
+      Promise.all([aguaDelDia(db), ajustesAgua(db)])
+        .then(([ml, a]) => setAgua({ ml, meta: a.metaMl, vaso: a.vasoMl }))
+        .catch(() => {});
       getSetting(db, 'inicio_modulos')
         .then((v) => setModulos(leerModulos(v)))
         .catch(() => {});
@@ -295,6 +302,36 @@ export function HoyScreen() {
             }}
           />
         </View>
+      </>
+    ),
+    agua: (
+      <>
+        {/* Agua: lo de hoy + un vaso con un toque */}
+        <Card style={[styles.banner, { marginTop: space.md, marginBottom: 0, paddingVertical: space.sm }]}>
+          <PressableScale accessibilityRole="button" accessibilityLabel="Abrir Agua" onPress={() => router.push('/agua')} style={styles.bienestarAbrir}>
+            <Ionicons name="water-outline" size={20} color={colors.accent} />
+            <View style={{ flex: 1 }}>
+              <AppText variant="callout" tabular>{agua ? `${formatoMl(agua.ml)} de ${formatoMl(agua.meta)}` : 'Agua'}</AppText>
+              <View style={{ marginTop: space.xs }}>
+                <ProgressBar value={Math.min(agua?.ml ?? 0, agua?.meta ?? 0)} max={(agua?.meta ?? 0) * 1.25} />
+              </View>
+            </View>
+          </PressableScale>
+          <PressableScale
+            accessibilityRole="button"
+            accessibilityLabel={`Anotar un vaso de agua${agua ? ` de ${formatoMl(agua.vaso)}` : ''}`}
+            onPress={async () => {
+              if (!agua) return;
+              await tomarAgua(db, agua.vaso).catch(console.warn);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              setAgua({ ...agua, ml: await aguaDelDia(db) });
+            }}
+            hitSlop={6}
+            style={[styles.pildora, { backgroundColor: colors.accentSoft }]}
+          >
+            <AppText variant="caption" tone="accent">+ vaso</AppText>
+          </PressableScale>
+        </Card>
       </>
     ),
     apps: (

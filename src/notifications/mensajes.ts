@@ -98,6 +98,18 @@ export const MENSAJE_PRUEBA = {
   cuerpo: 'Así te voy a ir hablando. Si ves esto, las notificaciones funcionan perfecto.',
 };
 
+export function mensajeAgua() {
+  return {
+    titulo: alAzar(['💧 Un vasito de agua', '💧 Hora de hidratarse', '💧 ¿Agüita?']),
+    cuerpo: alAzar([
+      'Tu cuerpo te lo va a agradecer.',
+      'Un vaso y sigues con lo tuyo.',
+      'Pequeño hábito, gran diferencia.',
+      'Si ya tomaste, anótalo en la app 😉',
+    ]),
+  };
+}
+
 export function mensajeTarea(p: { titulo: string; hora: string; minutos: number }) {
   const cuando = p.minutos === 0 ? 'Ahora' : p.minutos >= 1440 ? `Mañana a las ${p.hora}` : `En ${p.minutos >= 60 ? `${Math.round(p.minutos / 60)} h` : `${p.minutos} min`} (${p.hora})`;
   return {

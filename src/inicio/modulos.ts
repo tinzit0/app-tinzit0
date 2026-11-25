@@ -4,7 +4,7 @@
  * Si una versión nueva agrega un módulo, aparece al final (visible) sin perder tu orden.
  */
 
-export type IdModulo = 'rapido' | 'clima' | 'tareas' | 'gymGastos' | 'estadisticas' | 'estudio' | 'bienestar' | 'musica' | 'habitos' | 'apps';
+export type IdModulo = 'rapido' | 'clima' | 'tareas' | 'gymGastos' | 'estadisticas' | 'estudio' | 'bienestar' | 'musica' | 'habitos' | 'apps' | 'agua';
 
 export const MODULOS: { id: IdModulo; nombre: string; detalle: string }[] = [
   { id: 'rapido', nombre: 'Acceso rápido', detalle: 'Nueva tarea, gasto o nota con un toque' },
@@ -16,6 +16,7 @@ export const MODULOS: { id: IdModulo; nombre: string; detalle: string }[] = [
   { id: 'bienestar', nombre: 'Bienestar', detalle: 'Ánimo de hoy y "Estoy a mil"' },
   { id: 'musica', nombre: 'Música', detalle: 'Acceso a Spotify' },
   { id: 'habitos', nombre: 'Hábitos', detalle: 'Marca tus hábitos del día' },
+  { id: 'agua', nombre: 'Agua', detalle: 'Vasos de hoy y botón rápido' },
   { id: 'apps', nombre: 'Tus apps', detalle: 'Accesos a apps favoritas' },
 ];
 

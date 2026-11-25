@@ -20,6 +20,8 @@ export const FUNCIONES: Funcion[] = [
   { titulo: 'Metas de ahorro', detalle: 'Ahorrar para algo', ruta: '/metas', icono: 'flag-outline', palabras: 'ahorro ahorrar meta viaje juntar' },
   { titulo: 'Chanchito', detalle: 'Tu alcancía: echa lo que ahorras', ruta: '/chanchito', icono: 'wallet-outline', palabras: 'chanchito alcancia ahorro ahorrar monedas guardar plata' },
   { titulo: 'Tomar agua', detalle: 'Meta diaria y recordatorios', ruta: '/agua', icono: 'water-outline', palabras: 'agua hidratacion vaso litros tomar beber recordatorio' },
+  { titulo: 'Amigos y rachas', detalle: 'Rachas compartidas con tus amigos', ruta: '/amigos', icono: 'flame-outline', palabras: 'amigos racha rachas fueguito daniel compartir social' },
+  { titulo: 'Cuenta', detalle: 'Iniciar sesión y respaldo en la nube', ruta: '/cuenta', icono: 'person-circle-outline', palabras: 'cuenta sesion login registrarse contraseña nube respaldo supabase' },
   { titulo: 'Gym', detalle: 'Rutina, series y progreso', ruta: '/gym', icono: 'barbell-outline', palabras: 'entrenar ejercicio pesas rutina' },
   { titulo: 'Rutina semanal', detalle: 'Qué toca cada día', ruta: '/rutina', icono: 'calendar-outline', palabras: 'piernas pecho espalda dia gym' },
   { titulo: 'Cuerpo', detalle: 'Peso y medidas', ruta: '/cuerpo', icono: 'body-outline', palabras: 'peso kilos medidas cintura' },

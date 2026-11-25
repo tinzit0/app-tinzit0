@@ -122,6 +122,9 @@ function RootStack() {
         <Stack.Screen name="malla" options={{ title: 'Malla' }} />
         <Stack.Screen name="chanchito" options={{ title: 'Chanchito' }} />
         <Stack.Screen name="agua" options={{ title: 'Agua' }} />
+        <Stack.Screen name="cuenta" options={{ title: 'Cuenta' }} />
+        <Stack.Screen name="recuperar" options={{ title: 'Nueva contraseña' }} />
+        <Stack.Screen name="amigos" options={{ title: 'Amigos' }} />
         <Stack.Screen name="malla-ramo" options={{ presentation: 'modal', title: 'Ramo de la malla' }} />
         <Stack.Screen name="pomodoro" options={{ title: 'Modo enfoque' }} />
         <Stack.Screen name="tarjetas" options={{ title: 'Tarjetas' }} />

@@ -2,6 +2,7 @@
  * Ajustes: perfil, notificaciones, asistente de voz, presupuesto, seguridad (huella), respaldo y apariencia.
  */
 import { reloadAppAsync } from 'expo';
+import { useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Alert, Platform, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
@@ -36,6 +37,7 @@ import { soloDigitos } from '@/utils/montos';
 
 export function AjustesScreen() {
   const db = useSQLiteContext();
+  const router = useRouter();
   const { colors, preference, setPreference } = useTheme();
   const lock = useLock();
   const [nombre, setNombre] = useState('');
@@ -211,6 +213,14 @@ export function AjustesScreen() {
           accessibilityLabel="Tu nombre"
           style={inputStyle}
         />
+      </Section>
+
+      <Section title="Cuenta y amigos">
+        <AppText variant="callout" tone="secondary" style={styles.help}>Opcional: para rachas con amigos y respaldo en la nube.</AppText>
+        <View style={{ flexDirection: 'row', gap: space.md }}>
+          <Button label="Mi cuenta" variant="secondary" onPress={() => router.push('/cuenta')} style={{ flex: 1 }} />
+          <Button label="Amigos" variant="secondary" onPress={() => router.push('/amigos')} style={{ flex: 1 }} />
+        </View>
       </Section>
 
       <Section title="Notificaciones">

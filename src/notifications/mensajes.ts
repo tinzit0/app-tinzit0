@@ -98,6 +98,16 @@ export const MENSAJE_PRUEBA = {
   cuerpo: 'Así te voy a ir hablando. Si ves esto, las notificaciones funcionan perfecto.',
 };
 
+export function mensajeRachaPorMantener(p: { amigo: string; dias: number; actividad: string }) {
+  return {
+    titulo: `🔥 ${p.dias} ${p.dias === 1 ? 'día' : 'días'} con ${p.amigo}`,
+    cuerpo: alAzar([
+      `Hoy todavía pueden sumar otro día (${p.actividad.toLowerCase()}).`,
+      `Un empujoncito de ${p.actividad.toLowerCase()} y siguen la racha. Y si hoy no se puede, también está bien.`,
+    ]),
+  };
+}
+
 export function mensajeAgua() {
   return {
     titulo: alAzar(['💧 Un vasito de agua', '💧 Hora de hidratarse', '💧 ¿Agüita?']),

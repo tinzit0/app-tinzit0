@@ -21,6 +21,7 @@ const AVISOS: Aviso[] = [
   { key: 'notif_noche', horaKey: 'hora_noche', titulo: 'Recordatorio de la noche', detalle: 'Solo si te quedan tareas', defecto: '21:30' },
   { key: 'notif_domingo', horaKey: 'hora_domingo', titulo: 'Resumen del domingo', detalle: 'Tareas, gym y gastos de la semana', defecto: '20:00' },
   { key: 'notif_fijos', titulo: 'Pagos fijos', detalle: 'Un día antes de cada gasto fijo' },
+  { key: 'notif_rachas', titulo: 'Rachas con amigos', detalle: 'A las 20:00, si hoy pueden mantener la racha' },
   { key: 'notif_agua', titulo: 'Tomar agua', detalle: 'Cada cuánto y en qué horario se ajusta en Agua' },
   { key: 'notif_tareas', titulo: 'Alarmas de tareas', detalle: 'Las tareas con hora te avisan cuando elegiste' },
   { key: 'notif_clases', titulo: 'Antes de cada clase', detalle: '10 minutos antes, con la sala' },

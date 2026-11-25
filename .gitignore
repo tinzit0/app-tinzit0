@@ -42,3 +42,6 @@ yarn-error.*
 
 # Capturas de pruebas
 .playwright-mcp/
+
+# Claves de Supabase (nunca al repo)
+.env

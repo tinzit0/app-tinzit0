@@ -32,6 +32,7 @@ import { textoAnimo } from '@/bienestar/logica';
 import { leerModulos, type IdModulo, type ModuloInicio } from '@/inicio/modulos';
 import { aguaDelDia, ajustesAgua, tomarAgua } from '@/database/agua';
 import { formatoMl } from '@/agua/logica';
+import { mejorRachaDe } from '@/nube/logica';
 import { PressableScale } from '@/components/PressableScale';
 import { necesitaRespaldo } from '@/database/respaldo';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -67,6 +68,7 @@ export function HoyScreen() {
   const [animoHoy, setAnimoHoy] = useState<number | null>(null);
   const [modulos, setModulos] = useState<ModuloInicio[]>(() => leerModulos(null));
   const [agua, setAgua] = useState<{ ml: number; meta: number; vaso: number } | null>(null);
+  const [mejorRacha, setMejorRacha] = useState<number | null>(null);
   const { revisar } = useLogros();
 
   // Primera vez con la app vacía: configuración inicial breve (opcional).
@@ -91,6 +93,10 @@ export function HoyScreen() {
         })
         .catch(() => setClimaCargado(true));
       todosLosBloques(db).then(setBloques).catch(console.warn);
+      // Rachas: lo último que se vio en Amigos (sin esperar internet).
+      getSetting(db, 'rachas_cache')
+        .then((v) => setMejorRacha(mejorRachaDe(v)))
+        .catch(() => {});
       Promise.all([aguaDelDia(db), ajustesAgua(db)])
         .then(([ml, a]) => setAgua({ ml, meta: a.metaMl, vaso: a.vasoMl }))
         .catch(() => {});
@@ -331,6 +337,19 @@ export function HoyScreen() {
           >
             <AppText variant="caption" tone="accent">+ vaso</AppText>
           </PressableScale>
+        </Card>
+      </>
+    ),
+    amigos: (
+      <>
+        {/* Rachas con amigos */}
+        <Card onPress={() => router.push('/amigos')} accessibilityLabel="Amigos y rachas" style={[styles.banner, { marginTop: space.md, marginBottom: 0 }]}>
+          <Ionicons name={mejorRacha ? 'flame' : 'flame-outline'} size={20} color={mejorRacha ? colors.warning : colors.accent} />
+          <View style={{ flex: 1 }}>
+            <AppText variant="callout">{mejorRacha ? `Racha de ${mejorRacha} ${mejorRacha === 1 ? 'día' : 'días'} 🔥` : 'Rachas con amigos'}</AppText>
+            <AppText variant="caption" tone="tertiary">{mejorRacha ? 'Toca para ver cómo van hoy' : 'Cumplan algo juntos cada día'}</AppText>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
         </Card>
       </>
     ),

@@ -1,6 +1,6 @@
 # Tinzit0 — guía del proyecto
 
-App móvil **personal** (un solo usuario, Android) para organizar el día: tareas, gym, gastos en CLP, notas, hábitos, metas de ahorro, estadísticas y un asistente de voz. Todo se guarda **local** en el celular (SQLite). Sin cuentas ni servidores.
+App móvil **personal** (Android) para organizar el día: tareas, gym, gastos en CLP, notas, hábitos, metas de ahorro, estadísticas y un asistente de voz. Todo se guarda **local** en el celular (SQLite) y funciona sin internet. **Cuenta opcional en Supabase** (plan gratis) para rachas con amigos y respaldo en la nube.
 
 - El dueño **no es programador**: explicar en español simple, paso a paso. UI y comentarios del código en **español chileno informal** (mensajes cercanos, motivadores).
 - Flujo de trabajo: trabajar por fases, **commit + push a `main`** al cerrar cada una (repo público `github.com/tinzit0/app-tinzit0`), y explicar cómo probar en el celular.
@@ -101,6 +101,13 @@ scripts/                 test-db.ts, test-voz.ts, db-prueba.ts (adaptador node:s
 docs/propuestas-icono.png  3 estilos de ícono (por defecto: 1 "Grafito + Lima")
 ```
 
+## Nube (Supabase) — src/nube/
+
+- `cliente.ts`: `supabase` es null si falta `.env` (EXPO_PUBLIC_SUPABASE_URL / _ANON_KEY) → la app debe funcionar igual. Solo anon key, nunca service_role.
+- SQL en `supabase/migrations/` (RLS en TODAS las tablas; los contadores de racha solo los cambia el trigger `actualizar_rachas`). Cambios = migración nueva, mostrarle el SQL al dueño y esperar su OK.
+- `sincronizar.ts`: check-ins (tareas/gym/agua) con cola offline `checkins_pendientes`; respaldo = `volcarDatos` → `paraLaNube` (sin Bienestar, chat, bank_alerts, campus_visits ni ajustes de `AJUSTES_SOLO_TELEFONO`) → tabla `backups`. Restaurar = `combinarConLocal` + `restaurarRespaldo` (copia previa). Corre en `AppLifecycle`.
+- `logica.ts` es puro (scripts/test-nube.ts). Mensajes de racha SIEMPRE amables, nunca culposos.
+
 ## Reglas del código
 
 - **Migraciones**: nunca editar una existente; agregar una nueva al final de `MIGRATIONS`. Settings con `INSERT OR IGNORE`.
@@ -136,7 +143,13 @@ Bienestar (Estoy a mil, surfear impulso, tarjeta diaria DBT, patrones de ánimo,
 resumen para el psicólogo/a) · Inicio configurable y configuración inicial · Buscador de funciones · Acceso rápido ·
 Presupuestos por categoría y CSV · Aviso de gastos repetidos · Hábitos por días · Respaldos validados con copia previa.
 
+Nuevo (v2, 2026-11-25): Agenda semanal/diaria con tipo y sala por bloque (v11) · Subnotas (v12) · Malla interactiva
+(v13, ICINF UBB incluida, link de mallapp.cl o a mano) · Alarmas de tareas (v14) · Chanchito (v15) · Agua (v16) ·
+Cuenta, amigos, rachas y respaldo en la nube (Supabase).
+
 ## Pendiente / ideas
+
+- Inicio de sesión con Google (Supabase Auth + credenciales OAuth de Google Cloud).
 
 - Rutinas de gym con ejercicios, orden y series objetivo (hoy la rutina es solo un nombre por día).
 - Estudio por semestre y asistencia por bloque (hoy es por ramo y día).

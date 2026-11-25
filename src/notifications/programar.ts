@@ -25,12 +25,14 @@ import { obtenerProyeccion } from '@/database/finanzas';
 import { completadasEnRango, momentoAlarma, tareasDelDia } from '@/database/tareas';
 import { aguaDelDia, ajustesAgua } from '@/database/agua';
 import { enPausa, horasRecordatorio } from '@/agua/logica';
+import { nombreActividad, rachasPorMantener } from '@/nube/logica';
+import { actividadesCumplidas } from '@/nube/sincronizar';
 import { consejoClima, diaDe, obtenerClima, resumenCorto } from '@/clima/clima';
 import { toISODate, weekdayMonFirst } from '@/utils/fechas';
 import { conLimite } from '@/utils/red';
 import { datosBienestar, obtenerTarjeta } from '@/database/bienestar';
 import { diaDificil } from '@/bienestar/logica';
-import { mensajeAgua, mensajeApoyo, mensajeTarea, mensajeTarjeta, mensajeClase, mensajePreguntaAsistencia, mensajeDomingo, mensajeGastoFijo, mensajeManana, mensajeNoche, mensajePrueba, MENSAJE_PRUEBA } from './mensajes';
+import { mensajeAgua, mensajeRachaPorMantener, mensajeApoyo, mensajeTarea, mensajeTarjeta, mensajeClase, mensajePreguntaAsistencia, mensajeDomingo, mensajeGastoFijo, mensajeManana, mensajeNoche, mensajePrueba, MENSAJE_PRUEBA } from './mensajes';
 
 const CANAL = 'tinzit0';
 const DIAS_ADELANTE = 7;
@@ -252,6 +254,18 @@ export function reprogramarTodo(db: SQLiteDatabase): Promise<void> {
             const m = mensajeAgua();
             await agendar(m.titulo, m.cuerpo, cuando, { ruta: '/agua', tipo: 'agua' });
           }
+        }
+      }
+
+      // Rachas con amigos: si hoy la racha sigue viva y a ti te falta cumplir, un aviso amable a las 20:00.
+      if (await on('notif_rachas')) {
+        const cache = await getSetting(db, 'rachas_cache');
+        const hoyIso = toISODate(hoy);
+        const cumplidas = new Set(await actividadesCumplidas(db, hoyIso).catch(() => []));
+        for (const p of rachasPorMantener(cache, hoyIso)) {
+          if (cumplidas.has(p.actividad)) continue;
+          const m = mensajeRachaPorMantener({ amigo: p.amigo, dias: p.dias, actividad: nombreActividad(p.actividad) });
+          await agendar(m.titulo, m.cuerpo, enFecha(hoy, 20, 0), { ruta: '/amigos', tipo: 'racha' });
         }
       }
 

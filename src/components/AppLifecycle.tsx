@@ -22,6 +22,7 @@ import { aplicarFijosDelMes } from '@/database/fijos';
 import { getSetting, setSetting } from '@/database/queries';
 import { escucharAvisos, sincronizarAvisos } from '@/finanzas/sincronizar';
 import { prepararNotificaciones, reprogramarTodo } from '@/notifications/programar';
+import { sincronizarEnSegundoPlano } from '@/nube/sincronizar';
 import { actualizarWidget } from '@/widget';
 
 export function AppLifecycle() {
@@ -49,6 +50,8 @@ export function AppLifecycle() {
           await conciliarAsistencia(db).catch(console.warn);
           await reprogramarTodo(db).catch(console.warn);
           await actualizarWidget(db).catch(console.warn);
+          // Con cuenta: check-ins de las rachas y respaldo en la nube (si no hay internet, queda para después).
+          await sincronizarEnSegundoPlano(db).catch(() => {});
         } while (otraVez);
       } finally {
         corriendo = false;

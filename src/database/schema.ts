@@ -377,6 +377,18 @@ const MIGRATIONS: string[] = [
   ALTER TABLE tasks ADD COLUMN remind_min INTEGER;     -- minutos antes de due_time (0 = a la hora); NULL = sin alarma
   INSERT OR IGNORE INTO settings (key, value) VALUES ('notif_tareas', '1');
   `,
+
+  // v15 — Chanchito: alcancía aparte de las metas. Cada movimiento suma (echar plata) o resta (sacar).
+  `
+  CREATE TABLE IF NOT EXISTS piggy_movements (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    amount     INTEGER NOT NULL,                 -- CLP; positivo = echar, negativo = sacar
+    note       TEXT,
+    date       TEXT NOT NULL,                    -- 'YYYY-MM-DD'
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+  INSERT OR IGNORE INTO settings (key, value) VALUES ('chanchito_meta', '0');
+  `,
 ];
 
 /** Se llama una vez al abrir la app (desde SQLiteProvider en el _layout raíz). */

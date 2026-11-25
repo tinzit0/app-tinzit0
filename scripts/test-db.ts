@@ -151,6 +151,19 @@ async function main() {
   assert.equal((await tareas.obtenerTarea(db, tAl))?.remind_min, null);
   await tareas.eliminarTarea(db, tAl);
 
+  // Chanchito
+  const chan = await import('../src/database/chanchito');
+  await chan.echarAlChanchito(db, 5000, 'vuelto');
+  await chan.echarAlChanchito(db, 2000);
+  assert.equal(await chan.totalChanchito(db), 7000);
+  assert.equal(await chan.sacarDelChanchito(db, 10000), 7000, 'no saca más de lo que hay');
+  assert.equal(await chan.totalChanchito(db), 0);
+  await assert.rejects(() => chan.echarAlChanchito(db, 0));
+  await chan.ponerMetaChanchito(db, 50000);
+  assert.equal(await chan.metaChanchito(db), 50000);
+  assert.equal((await chan.movimientosChanchito(db)).length, 3);
+  assert.equal(await chan.echadoEnMes(db), 7000);
+
   console.log('✅ Todas las pruebas de base de datos pasaron');
 }
 

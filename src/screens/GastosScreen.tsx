@@ -36,6 +36,7 @@ import { contarAvisosPendientes, obtenerProyeccion } from '@/database/finanzas';
 import { posiblesDuplicados } from '@/database/presupuestos';
 import type { Proyeccion } from '@/finanzas/proyeccion';
 import { listarMetas } from '@/database/metas';
+import { totalChanchito } from '@/database/chanchito';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, space } from '@/theme/tokens';
 import { categoria, colorCategoria } from '@/utils/categorias';
@@ -60,6 +61,7 @@ export function GastosScreen() {
   const [datos, setDatos] = useState<Datos | null>(null);
   const [fijosMes, setFijosMes] = useState(0);
   const [ahorrado, setAhorrado] = useState(0);
+  const [chanchito, setChanchito] = useState(0);
   const [proy, setProy] = useState<Proyeccion | null>(null);
   const [delBanco, setDelBanco] = useState(0);
   const [repetidos, setRepetidos] = useState(0);
@@ -82,6 +84,7 @@ export function GastosScreen() {
     setDatos({ total, anterior, presupuesto, totalSemana, porCategoria, gastos });
     setFijosMes(await totalFijosMes(db));
     setAhorrado((await listarMetas(db)).reduce((n, m) => n + m.ahorrado, 0));
+    setChanchito(await totalChanchito(db));
     setProy(await obtenerProyeccion(db));
     setDelBanco(await contarAvisosPendientes(db));
     setRepetidos((await posiblesDuplicados(db).catch(() => [])).length);
@@ -234,6 +237,14 @@ export function GastosScreen() {
             <AppText variant="caption" tone="tertiary" numberOfLines={1}>Sácale foto</AppText>
           </Card>
         </View>
+        <Card onPress={() => router.push('/chanchito')} accessibilityLabel="Chanchito, tu alcancía" style={[styles.banner, { marginTop: space.md }]}>
+          <AppText style={{ fontSize: 22 }}>🐷</AppText>
+          <View style={{ flex: 1 }}>
+            <AppText variant="callout">Chanchito</AppText>
+            <AppText variant="caption" tone="tertiary" tabular>{chanchito > 0 ? `${formatCLP(chanchito)} guardados` : 'Echa lo que vas ahorrando'}</AppText>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+        </Card>
         <Card onPress={() => router.push('/presupuestos')} accessibilityLabel="Presupuestos por categoría y exportar CSV" style={[styles.banner, { marginTop: space.md }]}>
           <Ionicons name="pie-chart-outline" size={20} color={colors.accent} />
           <View style={{ flex: 1 }}>

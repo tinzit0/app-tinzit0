@@ -22,13 +22,13 @@ import { necesitaRespaldo } from '@/database/respaldo';
 import { minutosEstudio, nombreTipo, proximasEvaluaciones, todosLosBloques } from '@/database/estudio';
 import { asistenciaAutoActiva, visitaAbierta } from '@/database/campus';
 import { obtenerProyeccion } from '@/database/finanzas';
-import { completadasEnRango, tareasDelDia } from '@/database/tareas';
+import { completadasEnRango, momentoAlarma, tareasDelDia } from '@/database/tareas';
 import { consejoClima, diaDe, obtenerClima, resumenCorto } from '@/clima/clima';
 import { toISODate, weekdayMonFirst } from '@/utils/fechas';
 import { conLimite } from '@/utils/red';
 import { datosBienestar, obtenerTarjeta } from '@/database/bienestar';
 import { diaDificil } from '@/bienestar/logica';
-import { mensajeApoyo, mensajeTarjeta, mensajeClase, mensajePreguntaAsistencia, mensajeDomingo, mensajeGastoFijo, mensajeManana, mensajeNoche, mensajePrueba, MENSAJE_PRUEBA } from './mensajes';
+import { mensajeApoyo, mensajeTarea, mensajeTarjeta, mensajeClase, mensajePreguntaAsistencia, mensajeDomingo, mensajeGastoFijo, mensajeManana, mensajeNoche, mensajePrueba, MENSAJE_PRUEBA } from './mensajes';
 
 const CANAL = 'tinzit0';
 const DIAS_ADELANTE = 7;
@@ -116,6 +116,7 @@ export function reprogramarTodo(db: SQLiteDatabase): Promise<void> {
         on('notif_clases'),
         on('notif_pruebas'),
       ]);
+      const onTareas = await on('notif_tareas');
       const avisoClase = Number((await getSetting(db, 'aviso_clase_min')) ?? 10) || 10;
       const bloques = onClases ? await todosLosBloques(db) : [];
       const pruebas = (await proximasEvaluaciones(db, DIAS_ADELANTE + 1)).filter((e) => e.grade == null);
@@ -147,6 +148,16 @@ export function reprogramarTodo(db: SQLiteDatabase): Promise<void> {
         const iso = toISODate(dia);
         const tareas = await tareasDelDia(db, iso);
         const pendientes = tareas.filter((t) => !t.hecha).length;
+
+        // Alarmas de tareas con hora (las atrasadas de días anteriores no vuelven a sonar).
+        if (onTareas) {
+          for (const t of tareas.filter((x) => !x.hecha && !x.atrasada)) {
+            const cuando = momentoAlarma(iso, t);
+            if (!cuando) continue;
+            const a = mensajeTarea({ titulo: t.title, hora: t.due_time!, minutos: t.remind_min ?? 0 });
+            await agendar(a.titulo, a.cuerpo, cuando, { ruta: `/tarea?id=${t.id}`, tipo: 'tarea' });
+          }
+        }
 
         if (onManana) {
           const gym = await rutinaDeHoy(db, dia);

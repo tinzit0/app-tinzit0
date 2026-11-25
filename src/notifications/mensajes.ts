@@ -98,6 +98,14 @@ export const MENSAJE_PRUEBA = {
   cuerpo: 'Así te voy a ir hablando. Si ves esto, las notificaciones funcionan perfecto.',
 };
 
+export function mensajeTarea(p: { titulo: string; hora: string; minutos: number }) {
+  const cuando = p.minutos === 0 ? 'Ahora' : p.minutos >= 1440 ? `Mañana a las ${p.hora}` : `En ${p.minutos >= 60 ? `${Math.round(p.minutos / 60)} h` : `${p.minutos} min`} (${p.hora})`;
+  return {
+    titulo: `⏰ ${p.titulo}`,
+    cuerpo: `${cuando}. ${alAzar(['Tú puedes 💪', 'Un pasito a la vez.', 'Si no alcanzas, la mueves y listo.', 'Vamos que se puede.'])}`,
+  };
+}
+
 export function mensajeClase(p: { ramo: string; sala: string | null; minutos: number; hora: string; tipo?: string }) {
   return {
     titulo: `📚 ${p.tipo && p.tipo !== 'Cátedra' ? `${p.tipo} de ` : ''}${p.ramo} en ${p.minutos} min`,

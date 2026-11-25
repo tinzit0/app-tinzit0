@@ -135,6 +135,22 @@ async function main() {
 
   const r = await getResumenHoy(db);
   assert.equal(r.gastoSemana, 7500 + 6490);
+  // Alarmas de tareas
+  const tAl = await tareas.crearTarea(db, { title: 'Entregar informe', priority: 'alta', scope: 'diaria', due_date: '2030-05-10', repeat_type: 'none', repeat_days: [], due_time: '18:00', remind_min: 30 });
+  const al = await tareas.obtenerTarea(db, tAl);
+  assert.equal(al?.due_time, '18:00');
+  assert.equal(al?.remind_min, 30);
+  const m = tareas.momentoAlarma('2030-05-10', al!);
+  assert.equal(m?.getHours(), 17);
+  assert.equal(m?.getMinutes(), 30);
+  assert.equal(tareas.momentoAlarma('2030-05-10', { due_time: '08:00', remind_min: 1440 })?.getDate(), 9, 'un día antes');
+  assert.equal(tareas.momentoAlarma('2030-05-10', { due_time: '08:00', remind_min: null }), null, 'sin alarma');
+  assert.equal(tareas.describirCuando({ ...al!, due_date: null, scope: 'diaria', repeat_type: 'daily' }), 'Todos los días · 18:00');
+  // Sin hora no puede quedar con alarma.
+  await tareas.actualizarTarea(db, tAl, { title: 'Entregar informe', priority: 'alta', scope: 'diaria', due_date: '2030-05-10', repeat_type: 'none', repeat_days: [], due_time: null, remind_min: 10 });
+  assert.equal((await tareas.obtenerTarea(db, tAl))?.remind_min, null);
+  await tareas.eliminarTarea(db, tAl);
+
   console.log('✅ Todas las pruebas de base de datos pasaron');
 }
 

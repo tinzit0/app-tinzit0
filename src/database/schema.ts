@@ -370,6 +370,13 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX IF NOT EXISTS idx_curr_sem ON curriculum_courses(semester);
   `,
+
+  // v14 — Alarmas de tareas: hora de la tarea y cuántos minutos antes avisar (NULL = sin alarma).
+  `
+  ALTER TABLE tasks ADD COLUMN due_time TEXT;          -- 'HH:MM' o NULL
+  ALTER TABLE tasks ADD COLUMN remind_min INTEGER;     -- minutos antes de due_time (0 = a la hora); NULL = sin alarma
+  INSERT OR IGNORE INTO settings (key, value) VALUES ('notif_tareas', '1');
+  `,
 ];
 
 /** Se llama una vez al abrir la app (desde SQLiteProvider en el _layout raíz). */

@@ -14,12 +14,14 @@ import { Chip } from '@/components/Chip';
 import { Field, FieldLabel } from '@/components/Field';
 import {
   actualizarTarea,
+  AVISOS_TAREA,
   crearTarea,
   eliminarTarea,
   obtenerTarea,
   type Prioridad,
   type Repeticion,
 } from '@/database/tareas';
+import { prepararNotificaciones, reprogramarTodo } from '@/notifications/programar';
 import { useTheme } from '@/theme/ThemeProvider';
 import { space } from '@/theme/tokens';
 import { endOfWeek, fechaLarga, fromISODate, toISODate } from '@/utils/fechas';
@@ -45,6 +47,9 @@ export function TareaFormScreen() {
   const [cuando, setCuando] = useState<Cuando>('hoy');
   const [fecha, setFecha] = useState<Date>(new Date());
   const [mostrarPickerIOS, setMostrarPickerIOS] = useState(false);
+  const [hora, setHora] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<number | null>(null);
+  const [pickerHoraIOS, setPickerHoraIOS] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
   // Si estamos editando, cargamos los datos de la tarea.
@@ -57,6 +62,8 @@ export function TareaFormScreen() {
       setPrioridad(t.priority);
       setRepeticion(t.repeat_type);
       setDias((t.repeat_days ?? '').split(',').filter(Boolean).map(Number));
+      setHora(t.due_time ?? null);
+      setAviso(t.remind_min ?? null);
       if (t.scope === 'semanal') setCuando('semana');
       else if (!t.due_date) setCuando('sin');
       else if (t.due_date === toISODate()) setCuando('hoy');
@@ -86,6 +93,29 @@ export function TareaFormScreen() {
     }
   };
 
+  const dosD = (n: number) => String(n).padStart(2, '0');
+  const ponerHora = (d: Date) => {
+    setHora(`${dosD(d.getHours())}:${dosD(d.getMinutes())}`);
+    // Al poner una hora, la alarma parte "a la hora" (se puede cambiar o quitar).
+    setAviso((a) => a ?? 0);
+  };
+  const fechaHora = () => {
+    const d = new Date();
+    const [h, m] = (hora ?? '18:00').split(':').map(Number);
+    d.setHours(h, m, 0, 0);
+    return d;
+  };
+  const elegirHora = () => {
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({ value: fechaHora(), mode: 'time', is24Hour: true, onChange: (e, d) => e.type === 'set' && d && ponerHora(d) });
+    } else {
+      if (!hora) ponerHora(fechaHora());
+      setPickerHoraIOS(true);
+    }
+  };
+  // La hora solo tiene sentido si la tarea es de un día concreto (o se repite).
+  const admiteHora = repeticion !== 'none' || cuando === 'hoy' || cuando === 'manana' || cuando === 'fecha';
+
   const valido = titulo.trim().length > 0 && (repeticion !== 'weekdays' || dias.length > 0);
 
   const guardar = async () => {
@@ -106,10 +136,18 @@ export function TareaFormScreen() {
       due_date: due,
       repeat_type: repeticion,
       repeat_days: dias,
+      due_time: admiteHora ? hora : null,
+      remind_min: admiteHora && hora ? aviso : null,
     };
     try {
       if (id) await actualizarTarea(db, id, datos);
       else await crearTarea(db, datos);
+      if (datos.remind_min != null) {
+        // Pide permiso de notificaciones la primera vez que pones una alarma.
+        prepararNotificaciones(true)
+          .then(() => reprogramarTodo(db))
+          .catch(() => {});
+      } else reprogramarTodo(db).catch(() => {});
       cerrar();
     } finally {
       setGuardando(false);
@@ -215,6 +253,36 @@ export function TareaFormScreen() {
                 display="inline"
                 onChange={(_, d) => d && setFecha(d)}
               />
+            ) : null}
+          </View>
+        ) : null}
+
+        {admiteHora ? (
+          <View style={styles.section}>
+            <FieldLabel>Hora y alarma</FieldLabel>
+            <View style={styles.chips}>
+              <Chip label={hora ? `A las ${hora}` : 'Ponerle hora'} selected={!!hora} onPress={elegirHora} />
+              {hora ? (
+                <Chip
+                  label="Sin hora"
+                  onPress={() => {
+                    setHora(null);
+                    setAviso(null);
+                    setPickerHoraIOS(false);
+                  }}
+                />
+              ) : null}
+            </View>
+            {pickerHoraIOS && hora && Platform.OS === 'ios' ? (
+              <DateTimePicker value={fechaHora()} mode="time" display="spinner" onChange={(_, d) => d && ponerHora(d)} />
+            ) : null}
+            {hora ? (
+              <View style={[styles.chips, { marginTop: space.md }]}>
+                <Chip label="Sin alarma" selected={aviso == null} onPress={() => setAviso(null)} />
+                {AVISOS_TAREA.map((a) => (
+                  <Chip key={a.min} label={a.label} selected={aviso === a.min} onPress={() => setAviso(a.min)} />
+                ))}
+              </View>
             ) : null}
           </View>
         ) : null}

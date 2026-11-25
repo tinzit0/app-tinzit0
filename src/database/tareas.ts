@@ -27,6 +27,10 @@ export type Tarea = {
   done: number;
   done_at: string | null;
   created_at: string;
+  /** Hora de la tarea 'HH:MM' (opcional). */
+  due_time?: string | null;
+  /** Avisar estos minutos antes de la hora (0 = a la hora). null = sin alarma. */
+  remind_min?: number | null;
 };
 
 /** Una tarea "en un día concreto", con su estado de ese día. */
@@ -40,7 +44,26 @@ export type NuevaTarea = {
   due_date: string | null;
   repeat_type: Repeticion;
   repeat_days: number[];
+  due_time?: string | null;
+  remind_min?: number | null;
 };
+
+/** Opciones de alarma (minutos antes de la hora de la tarea). */
+export const AVISOS_TAREA: { min: number; label: string }[] = [
+  { min: 0, label: 'A la hora' },
+  { min: 10, label: '10 min antes' },
+  { min: 30, label: '30 min antes' },
+  { min: 60, label: '1 hora antes' },
+  { min: 1440, label: '1 día antes' },
+];
+
+/** Cuándo suena la alarma de una tarea en ese día (null si no tiene hora o alarma). */
+export function momentoAlarma(fechaISO: string, t: Pick<Tarea, 'due_time' | 'remind_min'>): Date | null {
+  if (!t.due_time || t.remind_min == null || !/^\d{2}:\d{2}$/.test(t.due_time)) return null;
+  const [h, m] = t.due_time.split(':').map(Number);
+  const d = fromISODate(fechaISO);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m - Math.max(0, t.remind_min), 0, 0);
+}
 
 const ORDEN_PRIORIDAD = `CASE priority WHEN 'alta' THEN 0 WHEN 'media' THEN 1 ELSE 2 END`;
 
@@ -133,8 +156,8 @@ export async function obtenerTarea(db: SQLiteDatabase, id: number): Promise<Tare
 
 export async function crearTarea(db: SQLiteDatabase, t: NuevaTarea): Promise<number> {
   const r = await db.runAsync(
-    `INSERT INTO tasks (title, notes, priority, scope, due_date, repeat_type, repeat_days)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO tasks (title, notes, priority, scope, due_date, repeat_type, repeat_days, due_time, remind_min)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     t.title.trim(),
     t.notes?.trim() || null,
     t.priority,
@@ -142,13 +165,16 @@ export async function crearTarea(db: SQLiteDatabase, t: NuevaTarea): Promise<num
     t.repeat_type === 'none' ? t.due_date : null,
     t.repeat_type,
     t.repeat_type === 'weekdays' ? t.repeat_days.sort().join(',') : null,
+    t.due_time || null,
+    t.due_time ? (t.remind_min ?? null) : null,
   );
   return r.lastInsertRowId;
 }
 
 export async function actualizarTarea(db: SQLiteDatabase, id: number, t: NuevaTarea): Promise<void> {
   await db.runAsync(
-    `UPDATE tasks SET title = ?, notes = ?, priority = ?, scope = ?, due_date = ?, repeat_type = ?, repeat_days = ?
+    `UPDATE tasks SET title = ?, notes = ?, priority = ?, scope = ?, due_date = ?, repeat_type = ?, repeat_days = ?,
+       due_time = ?, remind_min = ?
      WHERE id = ?`,
     t.title.trim(),
     t.notes?.trim() || null,
@@ -157,6 +183,8 @@ export async function actualizarTarea(db: SQLiteDatabase, id: number, t: NuevaTa
     t.repeat_type === 'none' ? t.due_date : null,
     t.repeat_type,
     t.repeat_type === 'weekdays' ? t.repeat_days.sort().join(',') : null,
+    t.due_time || null,
+    t.due_time ? (t.remind_min ?? null) : null,
     id,
   );
 }
@@ -213,7 +241,13 @@ export async function completadasEnRango(db: SQLiteDatabase, desdeISO: string, h
 }
 
 /** Texto corto que describe cuándo toca la tarea: "Todos los días", "Lun, Jue", "Mañana"… */
-export function describirCuando(t: Pick<Tarea, 'repeat_type' | 'repeat_days' | 'due_date' | 'scope'>): string | null {
+export function describirCuando(t: Pick<Tarea, 'repeat_type' | 'repeat_days' | 'due_date' | 'scope' | 'due_time'>): string | null {
+  const base = describirDia(t);
+  if (!t.due_time) return base;
+  return base ? `${base} · ${t.due_time}` : t.due_time;
+}
+
+function describirDia(t: Pick<Tarea, 'repeat_type' | 'repeat_days' | 'due_date' | 'scope'>): string | null {
   const CORTOS = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   if (t.repeat_type === 'daily') return 'Todos los días';
   if (t.repeat_type === 'weekdays') {
